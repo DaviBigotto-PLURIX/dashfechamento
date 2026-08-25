@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plurix · Cockpit de Gestão Operacional de Compras</title>
+  
+  <!-- Google Fonts: Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  
+  <!-- CSS Design System Oficial Plurix -->
+  <link rel="stylesheet" href="styles.css">
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+<div class="app-layout" id="appLayout">
+  
+  <!-- =====================================================================
+       BARRA LATERAL / MENU EXECUTIVO RETRÁTIL (SIDEBAR)
+       ===================================================================== -->
+  <aside class="sidebar" id="appSidebar">
+    
+    <!-- Topo da Sidebar: Logo Plurix PNG e Botão Hambúrguer -->
+    <div class="sidebar-brand">
+      <div class="brand-logo-wrap">
+        <img src="plurix-logo.png" alt="Plurix" class="plurix-brand-img">
+      </div>
+      <button class="btn-sidebar-toggle" id="btnToggleSidebar" title="Recolher / Expandir Menu">
+        <i data-lucide="menu" style="width:16px; height:16px;"></i>
+      </button>
+    </div>
+
+    <!-- Navegação Vertical Limpa -->
+    <nav class="sidebar-nav">
+      <div class="nav-section-title">Menu</div>
+      
+      <button class="nav-item tab-link active" data-tab="cockpit" title="Resumo">
+        <i data-lucide="home"></i>
+        <span>Resumo</span>
+      </button>
+
+      <button class="nav-item tab-link" data-tab="compradores" title="Compradores">
+        <i data-lucide="users"></i>
+        <span>Compradores</span>
+      </button>
+
+      <button class="nav-item tab-link" data-tab="workflow" title="Workflow">
+        <i data-lucide="git-branch"></i>
+        <span>Workflow</span>
+      </button>
+
+      <button class="nav-item tab-link" data-tab="investidas" title="Investidas">
+        <i data-lucide="building-2"></i>
+        <span>Investidas</span>
+      </button>
+
+      <button class="nav-item tab-link" data-tab="categorias" title="Categorias">
+        <i data-lucide="package"></i>
+        <span>Categorias</span>
+      </button>
+
+      <button class="nav-item tab-link" data-tab="alertasSla" title="Alertas SLA">
+        <i data-lucide="bell-ring"></i>
+        <span>Alertas SLA</span>
+      </button>
+    </nav>
+
+    <!-- Rodapé da Barra Lateral: Sincronização API & Tema -->
+    <div class="sidebar-footer">
+      
+      <!-- Card de Sincronização Diária da API -->
+      <div class="sync-widget" id="sidebarSyncWidget">
+        <div class="sync-widget-header">
+          <span class="sync-status-dot"></span>
+          <span class="sync-widget-title">API Organizer</span>
+        </div>
+        <div class="sync-widget-desc" id="syncStatusText">Conectada · Diário</div>
+        <button class="btn btn-sync-sidebar" id="btnSyncOrganizer" title="Sincronizar Dados da API">
+          <i data-lucide="refresh-cw" style="width:13px; height:13px;"></i>
+          <span>Sincronizar</span>
+        </button>
+      </div>
+
+      <!-- Alternador de Tema (Modo Claro / Escuro) -->
+      <div class="sidebar-user-controls">
+        <button class="btn-theme-pill" id="themeToggleBtn" title="Alternar Modo Claro / Escuro">
+          <i data-lucide="moon" id="themeIcon" style="width:14px; height:14px;"></i>
+          <span id="themeLabel">Modo Escuro</span>
+        </button>
+      </div>
+
+    </div>
+  </aside>
+
+  <!-- =====================================================================
+       ÁREA PRINCIPAL DE CONTEÚDO
+       ===================================================================== -->
+  <main class="main-content-wrap">
+    
+    <!-- Topbar Simplificada e Clean -->
+    <header class="main-topbar">
+      <div>
+        <h1 class="main-page-title" id="pageMainTitle">Visão Geral da Operação</h1>
+        <div class="main-page-subtitle" id="pageMainSubtitle">Acompanhamento diário de performance, prazos e volumetria</div>
+      </div>
+
+      <!-- Seletor de Período Limpo (YTD / Mensal) -->
+      <div class="period-control-group">
+        <div class="segmented-toggle">
+          <button class="toggle-btn active" id="btnModeYtd">YTD (Acumulado)</button>
+          <button class="toggle-btn" id="btnModeMonth">Mensal</button>
+        </div>
+
+        <div class="month-chips-wrap" id="monthSelectorChips" style="display:none;">
+          <!-- Chips de meses injetados dinamicamente via JS -->
+        </div>
+      </div>
+    </header>
+
+    <!-- Conteúdo das Abas -->
+    <div class="panes-container">
+      
+      <!-- ABA 1: COCKPIT GERAL -->
+      <section id="cockpit" class="section-pane active">
+        <div id="cockpitContent"></div>
+      </section>
+
+      <!-- ABA 2: COMPRADORES -->
+      <section id="compradores" class="section-pane">
+        <div id="compradoresContent"></div>
+      </section>
+
+      <!-- ABA 3: WORKFLOW & GARGALOS -->
+      <section id="workflow" class="section-pane">
+        <div id="workflowContent"></div>
+      </section>
+
+      <!-- ABA 4: INVESTIDAS -->
+      <section id="investidas" class="section-pane">
+        <div id="investidasContent"></div>
+      </section>
+
+      <!-- ABA 5: CATEGORIAS -->
+      <section id="categorias" class="section-pane">
+        <div id="categoriasContent"></div>
+      </section>
+
+      <!-- ABA 6: RAIO-X COMPLETO DO COMPRADOR (FULL-PAGE DOSSIER) -->
+      <section id="buyerDetailPane" class="section-pane">
+        <div id="buyerDetailContent"></div>
+      </section>
+
+      <!-- ABA 7: RAIO-X COMPLETO DA CATEGORIA (FULL-PAGE DOSSIER) -->
+      <section id="categoryDetailPane" class="section-pane">
+        <div id="categoryDetailContent"></div>
+      </section>
+
+      <!-- ABA 8: ALERTAS DE SLA / PRÓXIMOS AO VENCIMENTO -->
+      <section id="alertasSla" class="section-pane">
+        <div id="alertasSlaContent"></div>
+      </section>
+
+    </div>
+  </main>
+
+</div>
+
+<!-- =====================================================================
+     MODAL DE SINCRONIZAÇÃO DA API
+     ===================================================================== -->
+<div class="modal-backdrop" id="syncModal">
+  <div class="modal-dialog">
+    <div class="modal-title-bar">
+      <h2><i data-lucide="refresh-cw" style="width:16px; height:16px;"></i> Sincronizar API Organizer</h2>
+      <button class="btn-close" id="btnCloseSyncModal"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="callout-box" style="margin-bottom: 16px;">
+        <i data-lucide="info" class="callout-icon"></i>
+        <div class="callout-text">
+          A sincronização carrega os dados mais recentes de solicitações, status de aprovação e prazos direto da API do Organizer.
+        </div>
+      </div>
+      <div id="syncModalStatus" style="padding: 12px; background: var(--surface-subtle); border-radius: 8px; font-family: monospace; font-size: 11.5px; color: var(--text-secondary); max-height: 160px; overflow-y: auto; margin-bottom: 16px;">
+        Pronto para sincronizar.
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 8px;">
+        <button class="btn btn-subtle" id="btnCancelSync">Cancelar</button>
+        <button class="btn btn-primary" id="btnConfirmSync">Iniciar Atualização</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- =====================================================================
+     MODAL: RAIO-X DETALHADO DO COMPRADOR
+     ===================================================================== -->
+<div class="modal-backdrop" id="buyerDetailModal">
+  <div class="modal-dialog modal-dialog-large">
+    <div class="modal-title-bar">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <div class="buyer-avatar" id="modalBuyerAvatar">PL</div>
+        <div>
+          <h2 id="modalBuyerName" style="margin:0; font-size:16px;">Comprador</h2>
+          <div id="modalBuyerMeta" style="font-size:11.5px; color:var(--text-muted);">Dossiê individual de performance</div>
+        </div>
+      </div>
+      <button class="btn-close" id="btnCloseBuyerModal"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body" id="buyerModalBody" style="max-height: calc(85vh - 100px); overflow-y: auto;">
+      <!-- Injetado dinamicamente via JS -->
+    </div>
+  </div>
+</div>
+
+<!-- =====================================================================
+     MODAL: RAIO-X DA REDE INVESTIDA
+     ===================================================================== -->
+<div class="modal-backdrop" id="investidaDetailModal">
+  <div class="modal-dialog modal-dialog-large">
+    <div class="modal-title-bar">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <div class="buyer-avatar" style="background:var(--plx-primary);"><i data-lucide="building-2" style="width:16px; height:16px;"></i></div>
+        <div>
+          <h2 id="modalInvestidaName" style="margin:0; font-size:16px;">Rede Investida</h2>
+          <div id="modalInvestidaMeta" style="font-size:11.5px; color:var(--text-muted);">Compradores e volumetria da unidade</div>
+        </div>
+      </div>
+      <button class="btn-close" id="btnCloseInvestidaModal"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body" id="investidaModalBody" style="max-height: calc(85vh - 100px); overflow-y: auto;">
+      <!-- Injetado dinamicamente via JS -->
+    </div>
+  </div>
+</div>
+
+<!-- =====================================================================
+     MODAL: RAIO-X DA CATEGORIA DE COMPRAS
+     ===================================================================== -->
+<div class="modal-backdrop" id="categoryDetailModal">
+  <div class="modal-dialog modal-dialog-large" style="max-width: 820px;">
+    <div class="modal-title-bar">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <div class="buyer-avatar" style="background:var(--emerald);"><i data-lucide="package" style="width:16px; height:16px;"></i></div>
+        <div>
+          <h2 id="modalCategoryName" style="margin:0; font-size:16px;">Categoria</h2>
+          <div id="modalCategoryMeta" style="font-size:11.5px; color:var(--text-muted);">Chamados, datas de criação e finalização</div>
+        </div>
+      </div>
+      <button class="btn-close" id="btnCloseCategoryModal"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body" id="categoryModalBody" style="max-height: calc(85vh - 100px); overflow-y: auto;">
+      <!-- Injetado dinamicamente via JS -->
+    </div>
+<!-- =====================================================================
+     MODAL: RASTREABILIDADE & LINHA DO TEMPO DA SOLICITAÇÃO (TIMELINE STEPPER)
+     ===================================================================== -->
+<div class="modal-backdrop" id="solicitationTimelineModal">
+  <div class="modal-dialog modal-dialog-large" style="max-width: 860px;">
+    <div class="modal-title-bar">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <div class="buyer-avatar" style="background:linear-gradient(135deg, var(--plx-primary), var(--plx-accent));">
+          <i data-lucide="git-commit" style="width:18px; height:18px;"></i>
+        </div>
+        <div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <h2 id="modalTimelineTitle" style="margin:0; font-size:16px; font-weight:800; color:var(--text-primary);">Rastreabilidade da Solicitação</h2>
+            <span id="modalTimelineBadge" class="sla-badge fast" style="font-size:10.5px;">-</span>
+          </div>
+          <div id="modalTimelineSubtitle" style="font-size:11.5px; color:var(--text-muted); margin-top:2px;">Histórico de marcos temporais e SLA por etapa</div>
+        </div>
+      </div>
+      <button class="btn-close" id="btnCloseTimelineModal"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body" id="solicitationTimelineBody" style="max-height: calc(85vh - 90px); overflow-y: auto; padding: 20px;">
+      <!-- Injetado dinamicamente via JS -->
+    </div>
+  </div>
+</div>
+
+<!-- Scripts da Aplicação -->
+<script src="data.js"></script>
+<script src="app.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
+  });
+</script>
+</body>
+</html>

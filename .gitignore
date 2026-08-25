@@ -1,0 +1,6 @@
+node_modules/
+.env
+procurement_plurix.db
+procurement_plurix.db-shm
+procurement_plurix.db-wal
+.DS_Store
