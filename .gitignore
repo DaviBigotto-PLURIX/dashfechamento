@@ -1,6 +1,9 @@
 node_modules/
 .env
+*.db
+*.sqlite
+*.sqlite3
 procurement_plurix.db
-procurement_plurix.db-shm
-procurement_plurix.db-wal
+*-shm
+*-wal
 .DS_Store
