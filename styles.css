@@ -1140,15 +1140,17 @@ body {
 }
 
 .data-table th {
-  padding: 10px 14px;
+  padding: 11px 14px;
   text-align: left;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--text-muted);
   background: var(--surface-subtle);
   border-bottom: 1px solid var(--border-subtle);
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  white-space: nowrap;
+  vertical-align: middle;
 }
 
 .data-table td {

@@ -1317,11 +1317,11 @@ class PlurixApp {
                 <thead>
                   <tr>
                     <th style="min-width:130px;">Solicitação</th>
-                    <th style="min-width:105px;">🕐 Criação</th>
-                    <th style="min-width:105px;">✅ Aprovação</th>
-                    <th style="min-width:105px;">📊 Cotação</th>
-                    <th style="min-width:105px;">📄 Aprov. OC</th>
-                    <th style="min-width:105px;">🚀 Finalização</th>
+                    <th style="min-width:105px;">Criação</th>
+                    <th style="min-width:105px;">Aprovação</th>
+                    <th style="min-width:105px;">Cotação</th>
+                    <th style="min-width:105px;">Aprov. OC</th>
+                    <th style="min-width:110px;">Finalização</th>
                     <th style="min-width:130px;">Rede / Loja</th>
                     <th style="min-width:180px;">Categoria &amp; Modalidade</th>
                     <th style="min-width:110px;">Etapa Atual</th>
@@ -1910,11 +1910,11 @@ class PlurixApp {
                 <thead>
                   <tr>
                     <th style="min-width:130px;">Solicitação</th>
-                    <th style="min-width:105px;">🕐 Criação</th>
-                    <th style="min-width:105px;">✅ Aprovação</th>
-                    <th style="min-width:105px;">📊 Cotação</th>
-                    <th style="min-width:105px;">📄 Aprov. OC</th>
-                    <th style="min-width:105px;">🚀 Finalização</th>
+                    <th style="min-width:105px;">Criação</th>
+                    <th style="min-width:105px;">Aprovação</th>
+                    <th style="min-width:105px;">Cotação</th>
+                    <th style="min-width:105px;">Aprov. OC</th>
+                    <th style="min-width:110px;">Finalização</th>
                     <th style="min-width:120px;">Investida</th>
                     <th style="min-width:120px;">Comprador</th>
                     <th style="min-width:100px;">Modalidade</th>
