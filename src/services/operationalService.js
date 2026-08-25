@@ -68,8 +68,8 @@ class OperationalService {
     const kpiQuery = `
       SELECT 
         COUNT(*) as total_solicitacoes,
-        SUM(CASE WHEN status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado') THEN 1 ELSE 0 END) as backlog_ativo,
-        SUM(CASE WHEN status_nome IN ('Encerrado', 'Pedido Enviado') THEN 1 ELSE 0 END) as total_concluidas,
+        SUM(CASE WHEN status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando Entrega') THEN 1 ELSE 0 END) as backlog_ativo,
+        SUM(CASE WHEN status_nome IN ('Encerrado', 'Pedido Enviado', 'Aguardando Entrega') THEN 1 ELSE 0 END) as total_concluidas,
         
         -- SLA Cotação médio (apenas registros COM dado nativo do Organizer)
         ROUND(COALESCE(AVG(CASE WHEN dias_atendimento_sla IS NOT NULL AND dias_atendimento_sla >= 0 THEN dias_atendimento_sla END), 0), 1) as sla_cotacao_medio,
@@ -83,11 +83,11 @@ class OperationalService {
         SUM(CASE WHEN tipo_compra = 'SPOT_SERVICOS' THEN 1 ELSE 0 END) as total_spot_servicos,
         SUM(CASE WHEN tipo_compra = 'ESTRATEGICA' THEN 1 ELSE 0 END) as total_estrategicas,
         
-        -- Backlog crítico: >15 dias E status ANTES de Pedido Enviado
+        -- Requisições em Aberto críticas: >15 dias na etapa de cotação
         SUM(CASE 
           WHEN status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando Entrega')
-           AND data_criacao IS NOT NULL
-           AND (JULIANDAY('now') - JULIANDAY(data_criacao)) > 15
+           AND data_cotacao IS NOT NULL
+           AND (JULIANDAY('now') - JULIANDAY(data_cotacao)) > 15
           THEN 1 ELSE 0 
         END) as backlog_critico_maior_15d
       FROM solicitacao_organizer
@@ -201,7 +201,7 @@ class OperationalService {
       SELECT 
         comprador,
         COUNT(*) as total_solicitacoes,
-        SUM(CASE WHEN status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado') THEN 1 ELSE 0 END) as backlog_ativo,
+        SUM(CASE WHEN status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando Entrega') THEN 1 ELSE 0 END) as backlog_ativo,
         ROUND(COALESCE(AVG(CASE WHEN dias_atendimento_sla IS NOT NULL AND dias_atendimento_sla >= 0 THEN dias_atendimento_sla END), 0), 1) as sla_cotacao_medio,
         SUM(CASE WHEN dentro_sla IS NOT NULL THEN 1 ELSE 0 END) as com_sla,
         SUM(CASE WHEN dentro_sla = 1 THEN 1 ELSE 0 END) as dentro_sla_count
@@ -229,7 +229,11 @@ class OperationalService {
       SELECT 
         investida_nome as investida,
         COUNT(*) as total_solicitacoes,
-        SUM(CASE WHEN status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado') THEN 1 ELSE 0 END) as backlog_ativo,
+        SUM(CASE WHEN status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando Entrega') THEN 1 ELSE 0 END) as backlog_ativo,
+        SUM(CASE WHEN tipo_compra IN ('SPOT_MATERIAIS', 'SPOT_SERVICOS') THEN 1 ELSE 0 END) as qtd_spot,
+        SUM(CASE WHEN tipo_compra = 'SPOT_MATERIAIS' THEN 1 ELSE 0 END) as qtd_spot_mat,
+        SUM(CASE WHEN tipo_compra = 'SPOT_SERVICOS' THEN 1 ELSE 0 END) as qtd_spot_serv,
+        SUM(CASE WHEN tipo_compra = 'ESTRATEGICA' THEN 1 ELSE 0 END) as qtd_estrategica,
         ROUND(COALESCE(AVG(CASE WHEN dias_atendimento_sla IS NOT NULL AND dias_atendimento_sla >= 0 THEN dias_atendimento_sla END), 0), 1) as sla_cotacao_medio,
         SUM(CASE WHEN dentro_sla IS NOT NULL THEN 1 ELSE 0 END) as com_sla,
         SUM(CASE WHEN dentro_sla = 1 THEN 1 ELSE 0 END) as dentro_sla_count
@@ -269,8 +273,8 @@ class OperationalService {
       SELECT 
         tipo_compra,
         COUNT(*) as total,
-        SUM(CASE WHEN status_nome IN ('Encerrado', 'Pedido Enviado') THEN 1 ELSE 0 END) as concluidas,
-        SUM(CASE WHEN status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado') THEN 1 ELSE 0 END) as backlog,
+        SUM(CASE WHEN status_nome IN ('Encerrado', 'Pedido Enviado', 'Aguardando Entrega') THEN 1 ELSE 0 END) as concluidas,
+        SUM(CASE WHEN status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando Entrega') THEN 1 ELSE 0 END) as backlog,
         ROUND(COALESCE(AVG(CASE WHEN dias_atendimento_sla IS NOT NULL AND dias_atendimento_sla >= 0 THEN dias_atendimento_sla END), 0), 1) as sla_medio,
         SUM(CASE WHEN dentro_sla IS NOT NULL THEN 1 ELSE 0 END) as com_sla,
         SUM(CASE WHEN dentro_sla = 1 THEN 1 ELSE 0 END) as dentro_sla_count
@@ -442,8 +446,8 @@ class OperationalService {
       SELECT 
         comprador,
         COUNT(*) as total_solicitacoes,
-        SUM(CASE WHEN status_nome IN ('Encerrado', 'Pedido Enviado') THEN 1 ELSE 0 END) as total_atendidas,
-        SUM(CASE WHEN status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado') THEN 1 ELSE 0 END) as backlog_ativo,
+        SUM(CASE WHEN status_nome IN ('Encerrado', 'Pedido Enviado', 'Aguardando Entrega') THEN 1 ELSE 0 END) as total_atendidas,
+        SUM(CASE WHEN status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando Entrega') THEN 1 ELSE 0 END) as backlog_ativo,
         ROUND(COALESCE(AVG(CASE WHEN dias_atendimento_sla IS NOT NULL AND dias_atendimento_sla >= 0 THEN dias_atendimento_sla END), 0), 1) as sla_cotacao_medio,
         SUM(CASE WHEN dentro_sla IS NOT NULL THEN 1 ELSE 0 END) as com_sla,
         SUM(CASE WHEN dentro_sla = 1 THEN 1 ELSE 0 END) as dentro_sla_count,
@@ -534,8 +538,8 @@ class OperationalService {
       SELECT 
         comprador,
         COUNT(*) as total_solicitacoes,
-        SUM(CASE WHEN status_nome IN ('Encerrado', 'Pedido Enviado') THEN 1 ELSE 0 END) as total_atendidas,
-        SUM(CASE WHEN status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado') THEN 1 ELSE 0 END) as backlog_ativo,
+        SUM(CASE WHEN status_nome IN ('Encerrado', 'Pedido Enviado', 'Aguardando Entrega') THEN 1 ELSE 0 END) as total_atendidas,
+        SUM(CASE WHEN status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando Entrega') THEN 1 ELSE 0 END) as backlog_ativo,
         ROUND(COALESCE(AVG(CASE WHEN dias_atendimento_sla IS NOT NULL AND dias_atendimento_sla >= 0 THEN dias_atendimento_sla END), 0), 1) as sla_cotacao_medio,
         SUM(CASE WHEN dentro_sla IS NOT NULL THEN 1 ELSE 0 END) as com_sla,
         SUM(CASE WHEN dentro_sla = 1 THEN 1 ELSE 0 END) as dentro_sla_count,
@@ -560,7 +564,11 @@ class OperationalService {
       SELECT 
         investida_nome as investida,
         COUNT(*) as total_solicitacoes,
-        SUM(CASE WHEN status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado') THEN 1 ELSE 0 END) as backlog_ativo,
+        SUM(CASE WHEN status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando Entrega') THEN 1 ELSE 0 END) as backlog_ativo,
+        SUM(CASE WHEN tipo_compra IN ('SPOT_MATERIAIS', 'SPOT_SERVICOS') THEN 1 ELSE 0 END) as qtd_spot,
+        SUM(CASE WHEN tipo_compra = 'SPOT_MATERIAIS' THEN 1 ELSE 0 END) as qtd_spot_mat,
+        SUM(CASE WHEN tipo_compra = 'SPOT_SERVICOS' THEN 1 ELSE 0 END) as qtd_spot_serv,
+        SUM(CASE WHEN tipo_compra = 'ESTRATEGICA' THEN 1 ELSE 0 END) as qtd_estrategica,
         ROUND(COALESCE(AVG(CASE WHEN dias_atendimento_sla IS NOT NULL AND dias_atendimento_sla >= 0 THEN dias_atendimento_sla END), 0), 1) as sla_cotacao_medio,
         SUM(CASE WHEN dentro_sla IS NOT NULL THEN 1 ELSE 0 END) as com_sla,
         SUM(CASE WHEN dentro_sla = 1 THEN 1 ELSE 0 END) as dentro_sla_count
@@ -642,7 +650,7 @@ class OperationalService {
   async getWorkflowAndBacklog({ mode = 'ytd', month = 'jul', year = 2026 } = {}) {
     const db = getDatabase();
     const { clause, params, periodName } = this.buildPeriodFilter(mode, month, year);
-    const backlogWhere = `${clause} AND status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado')`;
+    const backlogWhere = `${clause} AND status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando Entrega')`;
 
     const agingRow = db.prepare(`
       SELECT 
@@ -719,7 +727,11 @@ class OperationalService {
       SELECT 
         investida_nome as investida,
         COUNT(*) as total_solicitacoes,
-        SUM(CASE WHEN status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado') THEN 1 ELSE 0 END) as backlog_ativo,
+        SUM(CASE WHEN status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando Entrega') THEN 1 ELSE 0 END) as backlog_ativo,
+        SUM(CASE WHEN tipo_compra IN ('SPOT_MATERIAIS', 'SPOT_SERVICOS') THEN 1 ELSE 0 END) as qtd_spot,
+        SUM(CASE WHEN tipo_compra = 'SPOT_MATERIAIS' THEN 1 ELSE 0 END) as qtd_spot_mat,
+        SUM(CASE WHEN tipo_compra = 'SPOT_SERVICOS' THEN 1 ELSE 0 END) as qtd_spot_serv,
+        SUM(CASE WHEN tipo_compra = 'ESTRATEGICA' THEN 1 ELSE 0 END) as qtd_estrategica,
         ROUND(COALESCE(AVG(CASE WHEN dias_atendimento_sla IS NOT NULL AND dias_atendimento_sla >= 0 THEN dias_atendimento_sla END), 0), 1) as sla_cotacao_medio,
         SUM(CASE WHEN dentro_sla IS NOT NULL THEN 1 ELSE 0 END) as com_sla,
         SUM(CASE WHEN dentro_sla = 1 THEN 1 ELSE 0 END) as dentro_sla_count,
@@ -727,6 +739,7 @@ class OperationalService {
       FROM solicitacao_organizer
       ${clause}
       GROUP BY investida_nome
+      ORDER BY total_solicitacoes DESC
     `).all(...params);
 
     rows = rows.map(r => ({
@@ -758,7 +771,9 @@ class OperationalService {
       SELECT 
         investida_nome as investida,
         COUNT(*) as total_solicitacoes,
-        SUM(CASE WHEN status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado') THEN 1 ELSE 0 END) as backlog_ativo,
+        SUM(CASE WHEN status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando Entrega') THEN 1 ELSE 0 END) as backlog_ativo,
+        SUM(CASE WHEN tipo_compra IN ('SPOT_MATERIAIS', 'SPOT_SERVICOS') THEN 1 ELSE 0 END) as qtd_spot,
+        SUM(CASE WHEN tipo_compra = 'ESTRATEGICA' THEN 1 ELSE 0 END) as qtd_estrategica,
         ROUND(COALESCE(AVG(CASE WHEN dias_atendimento_sla IS NOT NULL AND dias_atendimento_sla >= 0 THEN dias_atendimento_sla END), 0), 1) as sla_cotacao_medio,
         SUM(CASE WHEN dentro_sla IS NOT NULL THEN 1 ELSE 0 END) as com_sla,
         SUM(CASE WHEN dentro_sla = 1 THEN 1 ELSE 0 END) as dentro_sla_count
@@ -774,7 +789,11 @@ class OperationalService {
       SELECT 
         comprador,
         COUNT(*) as total_solicitacoes,
-        SUM(CASE WHEN status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado') THEN 1 ELSE 0 END) as backlog_ativo,
+        SUM(CASE WHEN status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando Entrega') THEN 1 ELSE 0 END) as backlog_ativo,
+        SUM(CASE WHEN tipo_compra IN ('SPOT_MATERIAIS', 'SPOT_SERVICOS') THEN 1 ELSE 0 END) as qtd_spot,
+        SUM(CASE WHEN tipo_compra = 'SPOT_MATERIAIS' THEN 1 ELSE 0 END) as qtd_spot_mat,
+        SUM(CASE WHEN tipo_compra = 'SPOT_SERVICOS' THEN 1 ELSE 0 END) as qtd_spot_serv,
+        SUM(CASE WHEN tipo_compra = 'ESTRATEGICA' THEN 1 ELSE 0 END) as qtd_estrategica,
         ROUND(COALESCE(AVG(CASE WHEN dias_atendimento_sla IS NOT NULL AND dias_atendimento_sla >= 0 THEN dias_atendimento_sla END), 0), 1) as sla_cotacao_medio,
         SUM(CASE WHEN dentro_sla IS NOT NULL THEN 1 ELSE 0 END) as com_sla,
         SUM(CASE WHEN dentro_sla = 1 THEN 1 ELSE 0 END) as dentro_sla_count

@@ -42,8 +42,8 @@ class PlurixApp {
         subtitle: 'Produtividade, capacidade e SLA individual por negociador'
       },
       workflow: {
-        title: 'Workflow & Gestão de Backlog',
-        subtitle: 'Funil de solicitações, tempo de retenção e desobstrução de gargalos'
+        title: 'Workflow & Requisições em Aberto',
+        subtitle: 'Funil de solicitações, tempo de cotação e desobstrução de gargalos'
       },
       investidas: {
         title: 'Redes Investidas (Lojas)',
@@ -444,10 +444,10 @@ class PlurixApp {
           </div>
         </div>
 
-        <!-- CARD 2: BACKLOG ATIVO (FILA) -->
+        <!-- CARD 2: REQUISIÇÕES EM ABERTO -->
         <div class="hero-kpi-card kpi-amber">
           <div class="hero-kpi-header">
-            <span class="hero-kpi-label" style="color:var(--amber);">Backlog Ativo (Fila)</span>
+            <span class="hero-kpi-label" style="color:var(--amber);">Requisições em Aberto</span>
             <div class="hero-kpi-icon-wrap" style="background:var(--amber-bg); color:var(--amber);">
               <i data-lucide="clock" style="width:14px; height:14px;"></i>
             </div>
@@ -455,7 +455,7 @@ class PlurixApp {
           <div class="hero-kpi-val" style="color:var(--amber);">${Number(k.backlogAtivo || 0).toLocaleString('pt-BR')}</div>
           <div class="hero-kpi-sub" style="color:var(--amber);">
             <i data-lucide="check-circle-2" style="width:12px; height:12px;"></i>
-            <strong>${Number(k.totalConcluidas || 0).toLocaleString('pt-BR')}</strong> solicitações concluídas
+            <strong>${Number(k.totalConcluidas || 0).toLocaleString('pt-BR')}</strong> concluídas / entregues
           </div>
         </div>
 
@@ -484,7 +484,7 @@ class PlurixApp {
               <i data-lucide="shield-check" style="width:14px; height:14px;"></i>
             </div>
           </div>
-          <div class="hero-kpi-val" style="color:${k.taxaConformidadePct >= 85 ? 'var(--emerald)' : 'var(--amber)'};">${k.taxaConformidadePct || 0}<span style="font-size:16px;">%</span></div>
+          <div class="hero-kpi-val" style="color:${k.taxaConformidadePct >= 85 ? 'var(--emerald)' : 'var(--amber)'};">${Math.round(k.taxaConformidadePct || 0)}<span style="font-size:16px;">%</span></div>
           <div class="hero-kpi-sub">
             <span>Meta Oficial: <strong>85%</strong></span>
             <span class="sla-badge ${k.gapConformidade >= 0 ? 'fast' : 'slow'}" style="font-size:10px; padding:2px 6px;">
@@ -518,12 +518,12 @@ class PlurixApp {
                   <strong style="font-size:13px; color:var(--text-primary);">Spot Materiais</strong>
                   <span class="tag-pill" style="font-size:10px; padding:2px 6px;">Meta: 10d</span>
                 </div>
-                <span class="sla-badge ${mod.spotMateriais?.conformidadePct >= 85 ? 'fast' : 'slow'}" style="font-size:11px;">
-                  ${mod.spotMateriais?.conformidadePct || 0}% no prazo
+                <span class="sla-badge ${mod.spotMateriais?.conformidadePct >= 85 ? 'fast' : 'warning'}" style="font-size:11px;">
+                  ${Math.round(mod.spotMateriais?.conformidadePct || 0)}% no prazo
                 </span>
               </div>
               <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px; color:var(--text-secondary);">
-                <span>Volume: <strong>${Number(mod.spotMateriais?.total || 0).toLocaleString('pt-BR')}</strong> · Fila: <strong>${Number(mod.spotMateriais?.backlog || 0).toLocaleString('pt-BR')}</strong></span>
+                <span>Volume: <strong>${Number(mod.spotMateriais?.total || 0).toLocaleString('pt-BR')}</strong> · Em Aberto: <strong>${Number(mod.spotMateriais?.backlog || 0).toLocaleString('pt-BR')}</strong></span>
                 <span>SLA Médio: <strong style="color:var(--plx-accent);">${mod.spotMateriais?.slaMedio || 0} dias</strong></span>
               </div>
             </div>
@@ -535,12 +535,12 @@ class PlurixApp {
                   <strong style="font-size:13px; color:var(--text-primary);">Spot Serviços</strong>
                   <span class="tag-pill" style="font-size:10px; padding:2px 6px;">Meta: 15d</span>
                 </div>
-                <span class="sla-badge ${mod.spotServicos?.conformidadePct >= 85 ? 'fast' : 'slow'}" style="font-size:11px;">
-                  ${mod.spotServicos?.conformidadePct || 0}% no prazo
+                <span class="sla-badge ${mod.spotServicos?.conformidadePct >= 85 ? 'fast' : 'warning'}" style="font-size:11px;">
+                  ${Math.round(mod.spotServicos?.conformidadePct || 0)}% no prazo
                 </span>
               </div>
               <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px; color:var(--text-secondary);">
-                <span>Volume: <strong>${Number(mod.spotServicos?.total || 0).toLocaleString('pt-BR')}</strong> · Fila: <strong>${Number(mod.spotServicos?.backlog || 0).toLocaleString('pt-BR')}</strong></span>
+                <span>Volume: <strong>${Number(mod.spotServicos?.total || 0).toLocaleString('pt-BR')}</strong> · Em Aberto: <strong>${Number(mod.spotServicos?.backlog || 0).toLocaleString('pt-BR')}</strong></span>
                 <span>SLA Médio: <strong style="color:var(--plx-accent);">${mod.spotServicos?.slaMedio || 0} dias</strong></span>
               </div>
             </div>
@@ -552,12 +552,12 @@ class PlurixApp {
                   <strong style="font-size:13px; color:var(--text-primary);">Estratégico</strong>
                   <span class="tag-pill" style="font-size:10px; padding:2px 6px;">Meta: 45d</span>
                 </div>
-                <span class="sla-badge ${mod.estrategica?.conformidadePct >= 85 ? 'fast' : 'slow'}" style="font-size:11px;">
-                  ${mod.estrategica?.conformidadePct || 0}% no prazo
+                <span class="sla-badge ${mod.estrategica?.conformidadePct >= 85 ? 'fast' : 'warning'}" style="font-size:11px;">
+                  ${Math.round(mod.estrategica?.conformidadePct || 0)}% no prazo
                 </span>
               </div>
               <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px; color:var(--text-secondary);">
-                <span>Volume: <strong>${Number(mod.estrategica?.total || 0).toLocaleString('pt-BR')}</strong> · Fila: <strong>${Number(mod.estrategica?.backlog || 0).toLocaleString('pt-BR')}</strong></span>
+                <span>Volume: <strong>${Number(mod.estrategica?.total || 0).toLocaleString('pt-BR')}</strong> · Em Aberto: <strong>${Number(mod.estrategica?.backlog || 0).toLocaleString('pt-BR')}</strong></span>
                 <span>SLA Médio: <strong style="color:var(--plx-accent);">${mod.estrategica?.slaMedio || 0} dias</strong></span>
               </div>
             </div>
@@ -647,12 +647,12 @@ class PlurixApp {
                     <strong style="color:var(--text-primary); font-size:12.5px;">${inv.investida}</strong>
                   </div>
                   <span class="sla-badge ${inv.taxa_conformidade_pct >= 85 ? 'fast' : (inv.taxa_conformidade_pct >= 70 ? 'warning' : 'slow')}" style="font-size:10.5px;">
-                    ${inv.taxa_conformidade_pct}% no prazo
+                    ${Math.round(inv.taxa_conformidade_pct || 0)}% no prazo
                   </span>
                 </div>
                 <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--text-secondary); margin-bottom:6px;">
-                  <span>Volume: <strong>${Number(inv.total_solicitacoes).toLocaleString('pt-BR')}</strong> · Fila: <strong>${inv.backlog_ativo}</strong></span>
-                  <span>SLA Médio: <strong>${inv.sla_cotacao_medio || 0}d</strong></span>
+                  <span>Vol: <strong>${Number(inv.total_solicitacoes).toLocaleString('pt-BR')}</strong> · Aberto: <strong>${inv.backlog_ativo}</strong></span>
+                  <span>SLA Cotação: <strong>${inv.sla_cotacao_medio || 0}d</strong></span>
                 </div>
                 <div style="width:100%; background:rgba(255,255,255,0.06); height:4px; border-radius:2px; overflow:hidden;">
                   <div style="width:${inv.taxa_conformidade_pct}%; background:${inv.taxa_conformidade_pct >= 85 ? 'var(--emerald)' : (inv.taxa_conformidade_pct >= 70 ? 'var(--amber)' : 'var(--coral)')}; height:100%;"></div>
@@ -757,10 +757,10 @@ class PlurixApp {
         <div class="buyer-highlight-card destaque-amber">
           <div class="buyer-card-header" style="color:var(--amber);">
             <i data-lucide="alert-octagon" style="width:13px; height:13px;"></i>
-            <span>⚠️ Maior Sobrecarga / Fila</span>
+            <span>⚠️ Maior Fila em Aberto</span>
           </div>
           <div class="buyer-card-name">${dest.sobrecarga?.comprador || 'Sem Sobrecarga'}</div>
-          <div class="buyer-card-sub">Backlog: <strong>${Number(dest.sobrecarga?.backlogAtivo || 0).toLocaleString('pt-BR')} pendências</strong></div>
+          <div class="buyer-card-sub">Em Aberto: <strong>${Number(dest.sobrecarga?.backlogAtivo || 0).toLocaleString('pt-BR')} solicitações</strong></div>
         </div>
 
         <div class="buyer-highlight-card destaque-accent">
@@ -794,7 +794,7 @@ class PlurixApp {
           <div style="display:flex; gap:4px;">
             <button class="btn-filter-tag ${this.state.buyerSort === 'volume' ? 'active' : ''}" data-sort="volume">Mais Volume</button>
             <button class="btn-filter-tag ${this.state.buyerSort === 'sla' ? 'active' : ''}" data-sort="sla">Menor SLA</button>
-            <button class="btn-filter-tag ${this.state.buyerSort === 'backlog' ? 'active' : ''}" data-sort="backlog">Maior Backlog</button>
+            <button class="btn-filter-tag ${this.state.buyerSort === 'backlog' ? 'active' : ''}" data-sort="backlog">Mais em Aberto</button>
             <button class="btn-filter-tag ${this.state.buyerSort === 'conformidade' ? 'active' : ''}" data-sort="conformidade">% no Prazo</button>
           </div>
         </div>
@@ -806,7 +806,7 @@ class PlurixApp {
                 <th style="width:28%;">Comprador</th>
                 <th style="width:24%;">Lojas Atendidas</th>
                 <th style="text-align:center; width:12%;">Volume</th>
-                <th style="text-align:center; width:12%;">Backlog</th>
+                <th style="text-align:center; width:12%;">Em Aberto</th>
                 <th style="text-align:center; width:12%;">SLA Cotação</th>
                 <th style="text-align:center; width:12%;">Ações</th>
               </tr>
@@ -1228,11 +1228,11 @@ class PlurixApp {
             </div>
 
             <div class="dossier-kpi-card amber">
-              <div class="dossier-kpi-title" style="color:var(--amber);">Backlog Ativo (Fila)</div>
+              <div class="dossier-kpi-title" style="color:var(--amber);">Em Aberto</div>
               <div class="dossier-kpi-number" style="color:var(--amber);">${Number(r.backlog_ativo || 0).toLocaleString('pt-BR')}</div>
               <div class="dossier-kpi-sub" style="color:var(--amber);">
                 <i data-lucide="clock" style="width:11px; height:11px; display:inline-block; vertical-align:middle;"></i>
-                <strong>${Number(r.total_atendidas || 0).toLocaleString('pt-BR')}</strong> solicitações concluídas
+                <strong>${Number(r.total_atendidas || 0).toLocaleString('pt-BR')}</strong> concluídas / entregues
               </div>
             </div>
 
@@ -1246,7 +1246,7 @@ class PlurixApp {
 
             <div class="dossier-kpi-card ${r.taxa_conformidade_pct >= 85 ? 'emerald' : 'amber'}">
               <div class="dossier-kpi-title">Taxa de Conformidade</div>
-              <div class="dossier-kpi-number" style="color:${r.taxa_conformidade_pct >= 85 ? 'var(--emerald)' : 'var(--amber)'};">${r.taxa_conformidade_pct || 100}%</div>
+              <div class="dossier-kpi-number" style="color:${r.taxa_conformidade_pct >= 85 ? 'var(--emerald)' : 'var(--amber)'};">${Math.round(r.taxa_conformidade_pct || 100)}%</div>
               <div class="dossier-kpi-sub">
                 <span class="sla-badge ${r.taxa_conformidade_pct >= 85 ? 'fast' : 'slow'}" style="font-size:10px;">
                   ${r.taxa_conformidade_pct >= 85 ? 'Meta de 85% Atingida' : 'Abaixo da meta'}
@@ -1260,7 +1260,7 @@ class PlurixApp {
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
               <div>
                 <div class="card-title">🏢 Performance por Rede Atendida</div>
-                <div class="card-subtitle">Volumetria, pendências e tempo de atendimento por rede atendida por este comprador</div>
+                <div class="card-subtitle">Volumetria, segregação Spot vs Estratégica e SLA de cotação por rede</div>
               </div>
               <span style="font-size:11.5px; color:var(--text-muted);">${investidas.length} redes na carteira</span>
             </div>
@@ -1276,11 +1276,14 @@ class PlurixApp {
                         ${isSlow ? 'Atenção' : 'Ágil'}
                       </span>
                     </div>
-                    <div style="font-size:11.5px; color:var(--text-muted); margin:4px 0 8px;">
-                      Volume: <strong>${Number(inv.total_solicitacoes).toLocaleString('pt-BR')}</strong> · Fila: <strong>${Number(inv.backlog_ativo).toLocaleString('pt-BR')}</strong>
+                    <div style="font-size:11.5px; color:var(--text-muted); margin:4px 0 6px;">
+                      Vol: <strong>${Number(inv.total_solicitacoes).toLocaleString('pt-BR')}</strong> · Aberto: <strong>${Number(inv.backlog_ativo).toLocaleString('pt-BR')}</strong>
+                    </div>
+                    <div style="font-size:10.5px; color:var(--text-secondary); margin-bottom:6px;">
+                      Spot: <strong>${inv.qtd_spot || 0}</strong> · Estratégica: <strong>${inv.qtd_estrategica || 0}</strong>
                     </div>
                     <div style="display:flex; justify-content:space-between; align-items:center; padding-top:6px; border-top:1px solid var(--border-subtle);">
-                      <span style="font-size:11px; color:var(--text-secondary);">SLA Médio:</span>
+                      <span style="font-size:11px; color:var(--text-secondary);">SLA Cotação:</span>
                       <strong style="color:${isSlow ? 'var(--coral)' : 'var(--emerald)'}; font-size:13px;">${inv.sla_cotacao_medio}d</strong>
                     </div>
                   </div>
@@ -1317,27 +1320,25 @@ class PlurixApp {
                 <thead>
                   <tr>
                     <th style="min-width:130px;">Solicitação</th>
-                    <th style="min-width:105px;">Criação</th>
-                    <th style="min-width:105px;">Aprovação</th>
-                    <th style="min-width:105px;">Cotação</th>
-                    <th style="min-width:105px;">Aprov. OC</th>
+                    <th style="min-width:110px;">Data Cotação</th>
+                    <th style="min-width:110px;">Pedido Enviado</th>
+                    <th style="min-width:110px;">Etapa Atual</th>
                     <th style="min-width:110px;">Finalização</th>
                     <th style="min-width:130px;">Rede / Loja</th>
                     <th style="min-width:180px;">Categoria &amp; Modalidade</th>
-                    <th style="min-width:110px;">Etapa Atual</th>
                     <th style="min-width:110px; text-align:center;">Dias / Meta</th>
                   </tr>
                 </thead>
                 <tbody>
                   ${filtrados.length === 0 ? `
                     <tr>
-                      <td colspan="10" style="text-align:center; padding:30px; color:var(--text-muted);">
+                      <td colspan="8" style="text-align:center; padding:30px; color:var(--text-muted);">
                         Nenhuma solicitação encontrada com os filtros selecionados.
                       </td>
                     </tr>
                   ` : filtrados.map(ch => {
                     const isOver = (ch.aging_dias || ch.dias_na_etapa || 0) > (ch.meta_sla_dias || 10);
-                    const isFinished = ch.status_nome === 'Encerrado' || ch.status_nome === 'Pedido Enviado';
+                    const isFinished = ch.status_nome === 'Encerrado' || ch.status_nome === 'Pedido Enviado' || ch.status_nome === 'Aguardando Entrega';
                     const dtCell = (val, color) => val
                       ? `<span style="font-size:11px; color:${color || 'var(--text-secondary)'}; font-weight:600;">${this.formatDate(val)}</span>`
                       : `<span style="font-size:11px; color:var(--text-dim); opacity:0.45;">—</span>`;
@@ -1346,14 +1347,17 @@ class PlurixApp {
                         <td>
                           <strong style="color:var(--plx-accent); font-size:12px;">${ch.numero_solicitacao || `#ORG-${ch.id}`}</strong>
                         </td>
-                        <td>${dtCell(ch.data_criacao, 'var(--text-secondary)')}</td>
-                        <td>${dtCell(ch.data_aprovacao, 'var(--sky)')}</td>
-                        <td>${dtCell(ch.data_cotacao, 'var(--amber)')}</td>
-                        <td>${dtCell(ch.data_aprovacao_pedido, 'var(--violet)')}</td>
+                        <td>${dtCell(ch.data_cotacao || ch.data_criacao, 'var(--text-secondary)')}</td>
+                        <td>${dtCell(ch.data_aprovacao_pedido, 'var(--sky)')}</td>
+                        <td>
+                          <span class="sla-badge ${isFinished ? 'fast' : (ch.status_nome === 'Cotacao' ? 'warning' : 'regular')}">
+                            ${ch.status_nome}
+                          </span>
+                        </td>
                         <td>
                           ${ch.data_finalizacao
                             ? `<span style="font-size:11px; color:var(--emerald); font-weight:700;">${this.formatDate(ch.data_finalizacao)}</span>`
-                            : `<span style="font-size:10.5px; color:var(--amber); font-weight:700; background:var(--surface-subtle); padding:2px 6px; border-radius:4px;">Em aberto</span>`}
+                            : (isFinished ? `<span style="font-size:10.5px; color:var(--emerald); font-weight:700;">Concluído</span>` : `<span style="font-size:10.5px; color:var(--amber); font-weight:700; background:var(--surface-subtle); padding:2px 6px; border-radius:4px;">Em aberto</span>`)}
                         </td>
                         <td>
                           <strong style="color:var(--text-primary); font-size:12px;">${ch.investida_nome}</strong>
@@ -1364,18 +1368,13 @@ class PlurixApp {
                             ${ch.modalidade_compra || 'Spot'} · <span style="color:var(--text-secondary);">Meta: ${ch.meta_sla_dias || 10}d</span>
                           </div>
                         </td>
-                        <td>
-                          <span class="sla-badge ${isFinished ? 'fast' : (ch.status_nome === 'Cotacao' ? 'warning' : 'regular')}">
-                            ${ch.status_nome}
-                          </span>
-                        </td>
                         <td class="center">
                           <strong style="color:${isFinished ? (isOver ? 'var(--coral)' : 'var(--emerald)') : (isOver ? 'var(--coral)' : 'var(--amber)')}; font-size:12.5px;">
-                            ${Math.round(ch.aging_dias || ch.dias_na_etapa || 0)}d
+                            ${Math.round(ch.dias_atendimento_sla || ch.aging_dias || 0)}d
                           </strong>
                           <span style="font-size:10px; color:var(--text-muted);">/ ${ch.meta_sla_dias || 10}d</span>
                           <div style="font-size:9.5px; color:${isFinished ? 'var(--emerald)' : (isOver ? 'var(--coral)' : 'var(--text-muted)')}; font-weight:700;">
-                            ${isFinished ? 'Atendido' : (isOver ? `+${Math.round((ch.aging_dias || ch.dias_na_etapa || 0) - (ch.meta_sla_dias || 10))}d atrasado` : 'No prazo')}
+                            ${isFinished ? 'Atendido' : (isOver ? `+${Math.round((ch.dias_atendimento_sla || ch.aging_dias || 0) - (ch.meta_sla_dias || 10))}d acima` : 'No prazo')}
                           </div>
                         </td>
                       </tr>
@@ -1548,9 +1547,13 @@ class PlurixApp {
               <span class="sla-badge ${inv.taxa_conformidade_pct >= 85 ? 'fast' : 'warning'}">${inv.taxa_conformidade_pct}% SLA</span>
             </div>
 
-            <div style="display:flex; justify-content:space-between; font-size:11.5px; color:var(--text-secondary); margin-bottom:8px;">
+            <div style="display:flex; justify-content:space-between; font-size:11.5px; color:var(--text-secondary); margin-bottom:4px;">
               <span>SLA Cotação: <strong style="color:var(--plx-accent);">${inv.sla_cotacao_medio}d</strong></span>
-              <span>Backlog: <strong style="color:var(--amber);">${inv.backlog_ativo}</strong></span>
+              <span>Em Aberto: <strong style="color:var(--amber);">${inv.backlog_ativo}</strong></span>
+            </div>
+
+            <div style="font-size:10.5px; color:var(--text-muted); margin-bottom:8px;">
+              Spot: <strong>${inv.qtd_spot || 0}</strong> · Estratégica: <strong>${inv.qtd_estrategica || 0}</strong>
             </div>
 
             <div style="background:var(--surface-subtle); height:6px; border-radius:3px; overflow:hidden;">
@@ -1572,8 +1575,8 @@ class PlurixApp {
               <tr>
                 <th>Rede Investida</th>
                 <th style="text-align:center;">Volume Total</th>
-                <th style="text-align:center;">Backlog</th>
-                <th style="text-align:center;">SLA Médio</th>
+                <th style="text-align:center;">Em Aberto</th>
+                <th style="text-align:center;">SLA Cotação</th>
                 <th style="text-align:center;">% no Prazo</th>
                 <th style="text-align:center;">Ações</th>
               </tr>
@@ -1581,13 +1584,16 @@ class PlurixApp {
             <tbody>
               ${investidas.map(inv => `
                 <tr>
-                  <td><strong style="color:var(--text-primary); font-size:13px;">${inv.investida}</strong></td>
+                  <td>
+                    <strong style="color:var(--text-primary); font-size:13px;">${inv.investida}</strong>
+                    <div style="font-size:10px; color:var(--text-muted);">Spot: ${inv.qtd_spot || 0} · Estrat: ${inv.qtd_estrategica || 0}</div>
+                  </td>
                   <td class="center">${Number(inv.total_solicitacoes).toLocaleString('pt-BR')}</td>
                   <td class="center"><strong style="color:var(--amber);">${Number(inv.backlog_ativo).toLocaleString('pt-BR')}</strong></td>
                   <td class="center"><strong style="color:var(--plx-accent); font-size:13px;">${inv.sla_cotacao_medio}d</strong></td>
                   <td class="center">
                     <span class="sla-badge ${inv.taxa_conformidade_pct >= 85 ? 'fast' : (inv.taxa_conformidade_pct >= 70 ? 'warning' : 'slow')}">
-                      ${inv.taxa_conformidade_pct}%
+                      ${Math.round(inv.taxa_conformidade_pct || 0)}%
                     </span>
                   </td>
                   <td class="center">
@@ -1648,14 +1654,17 @@ class PlurixApp {
             <tr>
               <th>Comprador</th>
               <th style="text-align:center;">Volume</th>
-              <th style="text-align:center;">Backlog</th>
+              <th style="text-align:center;">Em Aberto</th>
               <th style="text-align:center;">SLA Cotação</th>
             </tr>
           </thead>
           <tbody>
             ${compradores.map(c => `
               <tr>
-                <td><strong>${c.comprador}</strong></td>
+                <td>
+                  <strong>${c.comprador}</strong>
+                  <div style="font-size:10px; color:var(--text-muted);">Spot: ${c.qtd_spot || 0} · Estrat: ${c.qtd_estrategica || 0}</div>
+                </td>
                 <td class="center">${Number(c.total_solicitacoes).toLocaleString('pt-BR')}</td>
                 <td class="center"><strong style="color:var(--amber);">${c.backlog_ativo}</strong></td>
                 <td class="center">${this.getSlaBadge(c.sla_cotacao_medio)}</td>
@@ -1785,11 +1794,11 @@ class PlurixApp {
             </div>
 
             <div class="dossier-kpi-card amber">
-              <div class="dossier-kpi-title" style="color:var(--amber);">Backlog Ativo (Fila)</div>
+              <div class="dossier-kpi-title" style="color:var(--amber);">Em Aberto</div>
               <div class="dossier-kpi-number" style="color:var(--amber);">${Number(r.backlog_ativo || 0).toLocaleString('pt-BR')}</div>
               <div class="dossier-kpi-sub" style="color:var(--amber);">
                 <i data-lucide="clock" style="width:11px; height:11px; display:inline-block; vertical-align:middle;"></i>
-                <strong>${Number(r.total_atendidas || 0).toLocaleString('pt-BR')}</strong> solicitações concluídas
+                <strong>${Number(r.total_atendidas || 0).toLocaleString('pt-BR')}</strong> concluídas / entregues
               </div>
             </div>
 
@@ -1803,7 +1812,7 @@ class PlurixApp {
 
             <div class="dossier-kpi-card ${r.taxa_conformidade_pct >= 85 ? 'emerald' : 'amber'}">
               <div class="dossier-kpi-title">Taxa de Conformidade</div>
-              <div class="dossier-kpi-number" style="color:${r.taxa_conformidade_pct >= 85 ? 'var(--emerald)' : 'var(--amber)'};">${r.taxa_conformidade_pct || 100}%</div>
+              <div class="dossier-kpi-number" style="color:${r.taxa_conformidade_pct >= 85 ? 'var(--emerald)' : 'var(--amber)'};">${Math.round(r.taxa_conformidade_pct || 100)}%</div>
               <div class="dossier-kpi-sub">
                 <span class="sla-badge ${r.taxa_conformidade_pct >= 85 ? 'fast' : 'slow'}" style="font-size:10px;">
                   ${r.taxa_conformidade_pct >= 85 ? 'Meta de 85% Atingida' : 'Abaixo da meta'}
@@ -1834,10 +1843,10 @@ class PlurixApp {
                       </span>
                     </div>
                     <div style="font-size:11.5px; color:var(--text-muted); margin:4px 0 8px;">
-                      Volume: <strong>${Number(inv.total_solicitacoes).toLocaleString('pt-BR')}</strong> · Fila: <strong>${Number(inv.backlog_ativo).toLocaleString('pt-BR')}</strong>
+                      Vol: <strong>${Number(inv.total_solicitacoes).toLocaleString('pt-BR')}</strong> · Aberto: <strong>${Number(inv.backlog_ativo).toLocaleString('pt-BR')}</strong>
                     </div>
                     <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; padding-top:6px; border-top:1px dashed var(--border-subtle);">
-                      <span style="color:var(--text-secondary);">SLA Médio:</span>
+                      <span style="color:var(--text-secondary);">SLA Cotação:</span>
                       <strong style="color:${isSlow ? 'var(--coral)' : 'var(--emerald)'};">${inv.sla_cotacao_medio || 0} dias</strong>
                     </div>
                   </div>
@@ -1868,7 +1877,7 @@ class PlurixApp {
                       </span>
                     </div>
                     <div style="font-size:11.5px; color:var(--text-muted); margin:4px 0 8px;">
-                      Volume: <strong>${Number(comp.total_solicitacoes).toLocaleString('pt-BR')}</strong> · Fila: <strong>${Number(comp.backlog_ativo).toLocaleString('pt-BR')}</strong>
+                      Vol: <strong>${Number(comp.total_solicitacoes).toLocaleString('pt-BR')}</strong> · Aberto: <strong>${Number(comp.backlog_ativo).toLocaleString('pt-BR')}</strong>
                     </div>
                     <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; padding-top:6px; border-top:1px dashed var(--border-subtle);">
                       <span style="color:var(--text-secondary);">SLA Cotação:</span>
@@ -1910,28 +1919,26 @@ class PlurixApp {
                 <thead>
                   <tr>
                     <th style="min-width:130px;">Solicitação</th>
-                    <th style="min-width:105px;">Criação</th>
-                    <th style="min-width:105px;">Aprovação</th>
-                    <th style="min-width:105px;">Cotação</th>
-                    <th style="min-width:105px;">Aprov. OC</th>
+                    <th style="min-width:110px;">Data Cotação</th>
+                    <th style="min-width:110px;">Pedido Enviado</th>
+                    <th style="min-width:110px;">Etapa Atual</th>
                     <th style="min-width:110px;">Finalização</th>
                     <th style="min-width:120px;">Investida</th>
                     <th style="min-width:120px;">Comprador</th>
                     <th style="min-width:100px;">Modalidade</th>
-                    <th style="min-width:110px;">Etapa / Status</th>
-                    <th style="min-width:110px; text-align:center;">Lead Time / SLA</th>
+                    <th style="min-width:110px; text-align:center;">SLA Cotação</th>
                   </tr>
                 </thead>
                 <tbody>
                   ${filtrados.length === 0 ? `
                     <tr>
-                      <td colspan="11" style="text-align:center; padding:30px; color:var(--text-muted);">
+                      <td colspan="9" style="text-align:center; padding:30px; color:var(--text-muted);">
                         Nenhuma solicitação encontrada com os filtros aplicados.
                       </td>
                     </tr>
                   ` : filtrados.map(ch => {
                     const isOver = (ch.aging_dias || ch.dias_na_etapa || 0) > (ch.meta_sla_dias || 10);
-                    const isFinished = ch.status_nome === 'Encerrado' || ch.status_nome === 'Pedido Enviado';
+                    const isFinished = ch.status_nome === 'Encerrado' || ch.status_nome === 'Pedido Enviado' || ch.status_nome === 'Aguardando Entrega';
                     const dtCell = (val, color) => val
                       ? `<span style="font-size:11px; color:${color || 'var(--text-secondary)'}; font-weight:600;">${this.formatDate(val)}</span>`
                       : `<span style="font-size:11px; color:var(--text-dim); opacity:0.45;">—</span>`;
@@ -1942,20 +1949,27 @@ class PlurixApp {
                             ${ch.numero_solicitacao || `#ORG-${ch.id}`}
                           </div>
                         </td>
-                        <td>${dtCell(ch.data_criacao, 'var(--text-secondary)')}</td>
-                        <td>${dtCell(ch.data_aprovacao, 'var(--sky)')}</td>
-                        <td>${dtCell(ch.data_cotacao, 'var(--amber)')}</td>
-                        <td>${dtCell(ch.data_aprovacao_pedido, 'var(--violet)')}</td>
+                        <td>${dtCell(ch.data_cotacao || ch.data_criacao, 'var(--text-secondary)')}</td>
+                        <td>${dtCell(ch.data_aprovacao_pedido, 'var(--sky)')}</td>
+                        <td>
+                          <span class="sla-badge ${isFinished ? 'fast' : (ch.status_nome === 'Cotacao' ? 'warning' : 'regular')}">
+                            ${ch.status_nome}
+                          </span>
+                        </td>
                         <td>
                           ${ch.data_finalizacao ? `
                             <span style="font-size:11px; color:var(--emerald); font-weight:700;">
                               ${this.formatDate(ch.data_finalizacao)}
                             </span>
+                          ` : (isFinished ? `
+                            <span style="font-size:11px; color:var(--emerald); font-weight:700;">
+                              Concluído
+                            </span>
                           ` : `
                             <span style="font-size:11px; color:var(--amber); font-weight:700; background:var(--amber-bg); padding:2px 6px; border-radius:4px;">
                               Em aberto
                             </span>
-                          `}
+                          `)}
                         </td>
                         <td>
                           <div style="font-size:12px; font-weight:700; color:var(--text-primary);">${ch.investida_nome}</div>
@@ -2112,7 +2126,7 @@ class PlurixApp {
           <div style="display:flex; gap:4px;">
             <button class="btn-filter-tag ${this.state.categoriaSort === 'volume' ? 'active' : ''}" data-catsort="volume">Mais Volume</button>
             <button class="btn-filter-tag ${this.state.categoriaSort === 'sla' ? 'active' : ''}" data-catsort="sla">Pior SLA (Lentas)</button>
-            <button class="btn-filter-tag ${this.state.categoriaSort === 'backlog' ? 'active' : ''}" data-catsort="backlog">Maior Backlog</button>
+            <button class="btn-filter-tag ${this.state.categoriaSort === 'backlog' ? 'active' : ''}" data-catsort="backlog">Mais em Aberto</button>
           </div>
         </div>
 
@@ -2123,8 +2137,8 @@ class PlurixApp {
                 <th style="width:26%;">Categoria</th>
                 <th style="width:16%;">Modalidade</th>
                 <th style="text-align:center; width:10%;">Volume</th>
-                <th style="text-align:center; width:10%;">Backlog</th>
-                <th style="text-align:center; width:12%;">SLA Médio</th>
+                <th style="text-align:center; width:10%;">Em Aberto</th>
+                <th style="text-align:center; width:12%;">SLA Cotação</th>
                 <th style="text-align:center; width:14%;">Meta Oficial</th>
                 <th style="text-align:center; width:12%;">Ações</th>
               </tr>

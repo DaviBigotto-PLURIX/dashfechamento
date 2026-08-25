@@ -352,16 +352,41 @@ class OrganizerService {
           }
         }
 
-        // Meta SLA por tipo
+        // Meta SLA por tipo (Metas Oficiais Plurix)
         let metaSla = 10.0;
         if (tipoNorm === 'SPOT_SERVICOS') metaSla = 15.0;
+        else if (tipoNorm === 'ESTRATEGICA') metaSla = 45.0;
 
-        // Dentro do SLA
+        // SLA do Comprador = Estritamente o prazo decorrido na etapa de Cotação
+        let diasSla = null;
+        if (rawSla !== null && rawSla !== undefined && rawSla !== '--') {
+          const parsed = typeof rawSla === 'number' ? rawSla : parseFloat(String(rawSla).replace(',', '.'));
+          if (!isNaN(parsed) && parsed >= 0) {
+            diasSla = parsed;
+          }
+        }
+
+        // Se temos data_cotacao, calcular tempo estrito de cotação
+        if (dtCotacao) {
+          const dCot = new Date(dtCotacao);
+          if (!isNaN(dCot.getTime())) {
+            const dFimCot = (dtAprovacaoPedido || dtFinalizacao) ? new Date(dtAprovacaoPedido || dtFinalizacao) : null;
+            if (dFimCot && !isNaN(dFimCot.getTime())) {
+              const diffDays = Math.max(0, (dFimCot - dCot) / (1000 * 60 * 60 * 24));
+              diasSla = Math.round(diffDays * 10) / 10;
+            } else if (rawStatus.toLowerCase().includes('cota')) {
+              const diffDays = Math.max(0, (new Date() - dCot) / (1000 * 60 * 60 * 24));
+              diasSla = Math.round(diffDays * 10) / 10;
+            }
+          }
+        }
+
+        // Dentro do SLA (compara tempo de cotação contra a meta da modalidade)
         let dentroSla = null;
-        if (item.dentro_sla !== null && item.dentro_sla !== undefined) {
-          dentroSla = item.dentro_sla === 1 ? 1 : 0;
-        } else if (diasSla !== null) {
+        if (diasSla !== null) {
           dentroSla = diasSla <= metaSla ? 1 : 0;
+        } else if (item.dentro_sla !== null && item.dentro_sla !== undefined) {
+          dentroSla = item.dentro_sla === 1 ? 1 : 0;
         }
 
         insertStmt.run(
