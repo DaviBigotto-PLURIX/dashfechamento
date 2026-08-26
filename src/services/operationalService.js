@@ -114,15 +114,15 @@ class OperationalService {
     const rawFunnel = db.prepare(funnelQuery).all(...params);
 
     const stagesOrder = [
-      { key: 'Solicitação', label: '1. Solicitação / Triagem', color: '#59B3E6' },
+      { key: 'Solicitação', label: '1. Solicitação', color: '#59B3E6' },
       { key: 'Validação', label: '2. Validação', color: '#8B5CF6' },
-      { key: 'Cotação', label: '3. Em Cotação (Comprador)', color: '#001A8F' },
-      { key: 'Validação Técnica', label: '4. Validação Técnica', color: '#6366F1' },
-      { key: 'Aprovação', label: '5. Em Aprovação (Gestor)', color: '#F59E0B' },
+      { key: 'Validação Técnica', label: '3. Validação Técnica', color: '#6366F1' },
+      { key: 'Cotação', label: '4. Em Cotação (Comprador)', color: '#001A8F' },
+      { key: 'Aprovação', label: '5. Aprovação (Alçada)', color: '#F59E0B' },
       { key: 'Em Análise Contratual', label: '6. Análise Contratual', color: '#EC4899' },
       { key: 'Pedido Enviado', label: '7. Pedido Enviado', color: '#10B981' },
-      { key: 'Aguardando Entrega', label: '8. Aguardando Entrega', color: '#06B6D4' },
-      { key: 'Encerrado', label: '9. Concluído / Encerrado', color: '#64748B' }
+      { key: 'Aguardando entrega', label: '8. Aguardando Entrega', color: '#06B6D4' },
+      { key: 'Encerrado', label: '9. Encerrado / Concluído', color: '#64748B' }
     ];
 
     const totalReqs = kpiRow?.total_solicitacoes || 1;

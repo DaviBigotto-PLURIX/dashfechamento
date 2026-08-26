@@ -362,13 +362,13 @@ class PlurixApp {
     const statusLower = (ch.status_nome || '').toLowerCase().trim();
     const meta = ch.meta_sla_dias || 10;
     
-    // Status que representam conclusão/finalização da etapa de compras (Validação, Aprovação OC, Pedido Enviado, Aguardando Entrega, Encerrado)
-    const isFinished = statusLower === 'encerrado' || statusLower === 'pedido enviado' || statusLower.includes('entrega') || statusLower.includes('concluid') || statusLower.includes('valid') || statusLower.includes('aprov');
+    // 1. Finalizadas / Pedido Emitido (Fases 7, 8 e 9: Pedido Enviado, Aguardando Entrega, Encerrado)
+    const isFinished = statusLower === 'encerrado' || statusLower === 'pedido enviado' || statusLower.includes('entrega') || statusLower.includes('concluid');
     
-    // Status que estão ANTES da Cotação (área de compras ainda não assumiu)
-    const isPreCotacao = statusLower.includes('solicita') || statusLower.includes('abert') || statusLower.includes('triagem') || statusLower.includes('aprovacao sol') || statusLower.includes('aguardando aprov');
+    // 2. Pré-Cotação (Fases 1, 2 e 3: Solicitação, Validação, Validação Técnica) - Comprador ainda não iniciou cotação
+    const isPreCotacao = statusLower.includes('solicita') || statusLower.includes('valid') || statusLower.includes('triagem') || statusLower.includes('abert');
     
-    // Status que estão ATUALMENTE em Cotação
+    // 3. Em Cotação (Fase 4: Cotação) - Comprador negociando com fornecedores
     const isEmCotacao = statusLower.includes('cota');
 
     let diasCotacao = 0;
@@ -437,7 +437,7 @@ class PlurixApp {
     // Atualiza links da sidebar e bottom nav
     document.querySelectorAll('.sidebar-nav .tab-link').forEach(t => t.classList.toggle('active', t.dataset.tab === tabId));
     document.querySelectorAll('.mobile-bottom-nav .tab-link').forEach(t => t.classList.toggle('active', t.dataset.tab === tabId));
-    document.querySelectorAll('.section-pane').forEach(p => p.classList.toggle('active', p.id === tabId));
+    document.querySelectorAll('.section-pane').forEach(p => p.classList.toggle('active', p.id === tabId || p.id === `${tabId}Pane`));
 
     // Fecha drawer no mobile ao navegar
     const sidebar = document.getElementById('appSidebar');
