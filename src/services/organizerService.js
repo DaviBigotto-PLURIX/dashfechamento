@@ -172,7 +172,7 @@ class OrganizerService {
     const apiUrl = this.getApiUrl();
 
     if (!apiUrl) {
-      throw new Error('URL da API do Organizer não configurada no arquivo .env');
+      throw new Error('Serviço temporariamente indisponível. Tente novamente.');
     }
 
     // Monta URL apenas com ?page=X (a API recusa per_page)
@@ -230,10 +230,10 @@ class OrganizerService {
     }
 
     if (response.status === 302 || response.status === 301 || trimmed.includes('<!DOCTYPE') || trimmed.includes('<html')) {
-      throw new Error(`A sessão da API do Organizer expirou. Atualize o PHPSESSID no .env.`);
+      throw new Error(`Sessão temporariamente indisponível. Por favor, tente novamente em instantes.`);
     }
 
-    throw new Error(`API retornou status HTTP ${response.status}: ${trimmed.slice(0, 150)}`);
+    throw new Error(`Serviço temporariamente indisponível (HTTP ${response.status}). Tente novamente.`);
   }
 
   /**

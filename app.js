@@ -83,25 +83,34 @@ class PlurixApp {
     const sidebar = document.getElementById('appSidebar');
     const backdrop = document.getElementById('sidebarBackdrop');
     const btnMobile = document.getElementById('btnMobileMenu');
+    const btnToggle = document.getElementById('btnToggleSidebar');
 
-    if (sidebar && this.state.sidebarCollapsed) {
+    if (sidebar && this.state.sidebarCollapsed && window.innerWidth > 768) {
       sidebar.classList.add('collapsed');
     }
 
     const toggleSidebar = () => {
-      this.state.sidebarCollapsed = !this.state.sidebarCollapsed;
-      localStorage.setItem('plurix_sidebar_collapsed', this.state.sidebarCollapsed ? 'true' : 'false');
-      if (sidebar) {
-        sidebar.classList.toggle('collapsed', this.state.sidebarCollapsed);
+      if (window.innerWidth <= 768) {
+        // No mobile, o botão do topo da sidebar fecha o drawer
+        if (sidebar) sidebar.classList.remove('mobile-open');
+        if (backdrop) backdrop.classList.remove('active');
+      } else {
+        this.state.sidebarCollapsed = !this.state.sidebarCollapsed;
+        localStorage.setItem('plurix_sidebar_collapsed', this.state.sidebarCollapsed ? 'true' : 'false');
+        if (sidebar) {
+          sidebar.classList.toggle('collapsed', this.state.sidebarCollapsed);
+        }
       }
     };
 
-    const btnToggle = document.getElementById('btnToggleSidebar');
     if (btnToggle) btnToggle.addEventListener('click', toggleSidebar);
 
     // Controle Mobile Drawer
     const openMobileMenu = () => {
-      if (sidebar) sidebar.classList.add('mobile-open');
+      if (sidebar) {
+        sidebar.classList.remove('collapsed');
+        sidebar.classList.add('mobile-open');
+      }
       if (backdrop) backdrop.classList.add('active');
     };
 
@@ -191,11 +200,11 @@ class PlurixApp {
 
     this.renderMonthChips();
 
-    // Navegação Sidebar
-    document.querySelectorAll('.sidebar-nav .tab-link').forEach(tab => {
+    // Navegação Sidebar e Bottom Nav
+    document.querySelectorAll('.tab-link').forEach(tab => {
       tab.addEventListener('click', () => {
         const tabId = tab.dataset.tab;
-        this.switchTab(tabId);
+        if (tabId) this.switchTab(tabId);
       });
     });
   }
@@ -233,12 +242,12 @@ class PlurixApp {
               btnConfirmSync.textContent = 'Iniciar Atualização';
             }, 900);
           } else {
-            statusBox.innerHTML += `<span style="color:var(--coral);">Erro: ${json.erro || 'Falha ao sincronizar'}</span>`;
+            statusBox.innerHTML += `<span style="color:var(--coral);">Não foi possível atualizar no momento. Por favor, tente novamente em instantes.</span>`;
             btnConfirmSync.disabled = false;
             btnConfirmSync.textContent = 'Tentar Novamente';
           }
         } catch (err) {
-          statusBox.innerHTML += `<span style="color:var(--coral);">Erro de conexão: ${err.message}</span>`;
+          statusBox.innerHTML += `<span style="color:var(--coral);">Não foi possível concluir a sincronização. Por favor, tente novamente.</span>`;
           btnConfirmSync.disabled = false;
           btnConfirmSync.textContent = 'Tentar Novamente';
         }
