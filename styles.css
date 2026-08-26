@@ -1697,9 +1697,12 @@ body {
 /* =====================================================================
    RADAR PREDITIVO DE SLA (ALERTAS)
    ===================================================================== */
+/* =====================================================================
+   RADAR PREDITIVO DE SLA & VENCIMENTOS (v5.0 - CLEAN & EXECUTIVE)
+   ===================================================================== */
 .radar-counters-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 12px;
   margin-bottom: 20px;
 }
@@ -1708,87 +1711,129 @@ body {
   background: var(--surface-card);
   border: 1px solid var(--border-card);
   border-radius: var(--radius-md);
-  padding: 14px 16px;
+  padding: 14px 18px;
   display: flex;
   align-items: center;
   gap: 14px;
   cursor: pointer;
-  transition: all var(--trans-fast);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
 }
 
-.radar-counter-card:hover, .radar-counter-card.active {
+.radar-counter-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: currentColor;
+  opacity: 0.8;
+}
+
+.radar-counter-card:hover {
   transform: translateY(-2px);
   border-color: currentColor;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
 }
 
-.radar-counter-card.danger { color: var(--coral); border-left: 4px solid var(--coral); }
-.radar-counter-card.warning-high { color: #F97316; border-left: 4px solid #F97316; }
-.radar-counter-card.warning-mid { color: var(--amber); border-left: 4px solid var(--amber); }
-.radar-counter-card.success { color: var(--emerald); border-left: 4px solid var(--emerald); }
+.radar-counter-card.active {
+  transform: translateY(-2px);
+  border-color: currentColor;
+  background: linear-gradient(135deg, var(--surface-card) 0%, rgba(255, 255, 255, 0.03) 100%);
+  box-shadow: 0 0 0 1px currentColor, 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.radar-counter-card.danger { color: var(--coral); }
+.radar-counter-card.warning-high { color: #F97316; }
+.radar-counter-card.warning-mid { color: var(--amber); }
+.radar-counter-card.success { color: var(--emerald); }
 
 .radar-counter-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-sm);
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: currentColor;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   flex-shrink: 0;
+  color: currentColor;
 }
 
 .radar-counter-icon i {
-  color: var(--surface-card);
   width: 20px;
   height: 20px;
 }
 
 .radar-counter-val {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 900;
   line-height: 1.1;
+  color: var(--text-primary);
+  letter-spacing: -0.5px;
 }
 
 .radar-counter-label {
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
-  color: var(--text-secondary);
-  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* Mini rankings de risco */
+.radar-ranking-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--surface-subtle);
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.radar-ranking-item:hover {
+  background: var(--surface-panel);
+  border-color: var(--border-subtle);
+  transform: translateX(2px);
 }
 
 .pulse-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
   padding: 3px 8px;
-  border-radius: 6px;
+  border-radius: 5px;
+  letter-spacing: 0.1px;
 }
 
 .pulse-badge.vencido {
-  background: rgba(239, 68, 68, 0.15);
+  background: rgba(239, 68, 68, 0.12);
   color: #EF4444;
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  border: 1px solid rgba(239, 68, 68, 0.25);
 }
 
 .pulse-badge.critico_24h {
-  background: rgba(249, 115, 22, 0.15);
+  background: rgba(249, 115, 22, 0.12);
   color: #F97316;
-  border: 1px solid rgba(249, 115, 22, 0.3);
+  border: 1px solid rgba(249, 115, 22, 0.25);
 }
 
 .pulse-badge.alerta_72h {
-  background: rgba(245, 158, 11, 0.15);
+  background: rgba(245, 158, 11, 0.12);
   color: #F59E0B;
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  border: 1px solid rgba(245, 158, 11, 0.25);
 }
 
 .pulse-badge.no_prazo {
-  background: rgba(16, 185, 129, 0.15);
+  background: rgba(16, 185, 129, 0.12);
   color: #10B981;
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  border: 1px solid rgba(16, 185, 129, 0.25);
 }
 
 /* =====================================================================

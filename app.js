@@ -317,6 +317,94 @@ class PlurixApp {
     if (subElem) subElem.textContent = `${info.subtitle} · (${periodDesc})`;
   }
 
+  getCalendarDaysDiff(startDate, endDate) {
+    if (!startDate || !endDate) return 0;
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (isNaN(start.getTime()) || isNaN(end.getTime()) || start >= end) return 0;
+    return Math.max(0, Math.round((end - start) / (1000 * 60 * 60 * 24)));
+  }
+
+  /**
+   * Avaliação Estrita do SLA de Compras em DIAS CORRIDOS:
+   * 1. Etapas Anteriores à Cotação (Solicitação, Triagem, etc.): SLA do Comprador NÃO começou (0d / Fora de Compras).
+   * 2. Etapa de Cotação: Tempo corrente em DIAS CORRIDOS de cotação contra a meta (10d, 15d, 45d).
+   * 3. Etapas Posteriores (Validação Técnica, Aprovação OC, etc.) & Concluídas: Tempo de cotação congelado na entrega da cotação.
+   * 4. Aguardando Entrega: Concluído do ponto de vista do comprador.
+   */
+  getTicketSlaEvaluation(ch) {
+    const statusLower = (ch.status_nome || '').toLowerCase().trim();
+    const meta = ch.meta_sla_dias || 10;
+    
+    // Status que representam conclusão/finalização da etapa de compras (Validação, Aprovação OC, Pedido Enviado, Aguardando Entrega, Encerrado)
+    const isFinished = statusLower === 'encerrado' || statusLower === 'pedido enviado' || statusLower.includes('entrega') || statusLower.includes('concluid') || statusLower.includes('valid') || statusLower.includes('aprov');
+    
+    // Status que estão ANTES da Cotação (área de compras ainda não assumiu)
+    const isPreCotacao = statusLower.includes('solicita') || statusLower.includes('abert') || statusLower.includes('triagem') || statusLower.includes('aprovacao sol') || statusLower.includes('aguardando aprov');
+    
+    // Status que estão ATUALMENTE em Cotação
+    const isEmCotacao = statusLower.includes('cota');
+
+    let diasCotacao = 0;
+    let label = 'No prazo';
+    let isOver = false;
+    let cor = 'var(--emerald)';
+    let badgeHtml = '';
+
+    if (isPreCotacao) {
+      diasCotacao = 0;
+      label = 'Pré-Cotação';
+      isOver = false;
+      cor = 'var(--text-muted)';
+      badgeHtml = `
+        <div style="font-size:12.5px; font-weight:700; color:var(--text-muted);">— <span style="font-size:10px; color:var(--text-dim);">/ ${meta}d</span></div>
+        <div style="font-size:9.5px; color:var(--text-muted); font-weight:700;">Pré-Cotação</div>
+      `;
+    } else if (isEmCotacao) {
+      diasCotacao = this.getCalendarDaysDiff(ch.data_cotacao || ch.data_criacao, new Date());
+      isOver = diasCotacao > meta;
+      label = isOver ? `+${Math.round(diasCotacao - meta)}d acima` : 'No prazo';
+      cor = isOver ? 'var(--coral)' : 'var(--amber)';
+      badgeHtml = `
+        <div style="font-size:12.5px; font-weight:800; color:${cor};">${diasCotacao}d <span style="font-size:10px; color:var(--text-muted);">/ ${meta}d</span></div>
+        <div style="font-size:9.5px; color:${cor}; font-weight:700;">${label}</div>
+      `;
+    } else {
+      // Pós-Cotação (Validação Técnica, Aprovação OC) ou Concluído (Pedido Enviado, Aguardando Entrega, Encerrado)
+      if (ch.dias_atendimento_sla !== null && ch.dias_atendimento_sla !== undefined && ch.dias_atendimento_sla >= 0) {
+        diasCotacao = Math.round(ch.dias_atendimento_sla);
+      } else {
+        const startD = ch.data_cotacao || ch.data_criacao;
+        const endD = ch.data_aprovacao_pedido || ch.data_finalizacao || ch.data_aprovacao;
+        diasCotacao = startD && endD ? this.getCalendarDaysDiff(startD, endD) : 0;
+      }
+      isOver = diasCotacao > meta;
+      if (isFinished) {
+        label = isOver ? `Atendido (+${diasCotacao - meta}d)` : 'Atendido';
+        cor = isOver ? 'var(--coral)' : 'var(--emerald)';
+      } else {
+        label = isOver ? `Cotação (+${diasCotacao - meta}d)` : 'Cotação OK';
+        cor = isOver ? 'var(--coral)' : 'var(--emerald)';
+      }
+      badgeHtml = `
+        <div style="font-size:12.5px; font-weight:800; color:${cor};">${diasCotacao}d <span style="font-size:10px; color:var(--text-muted);">/ ${meta}d</span></div>
+        <div style="font-size:9.5px; color:${cor}; font-weight:700;">${label}</div>
+      `;
+    }
+
+    return {
+      isFinished,
+      isPreCotacao,
+      isEmCotacao,
+      diasCotacao,
+      meta,
+      isOver,
+      label,
+      cor,
+      badgeHtml
+    };
+  }
+
   switchTab(tabId) {
     this.state.activeTab = tabId;
     
@@ -427,7 +515,7 @@ class PlurixApp {
       <div class="hero-kpis-grid">
         
         <!-- CARD 1: VOLUME TOTAL -->
-        <div class="hero-kpi-card kpi-accent">
+        <div class="hero-kpi-card kpi-primary">
           <div class="hero-kpi-header">
             <span class="hero-kpi-label">Volume de Requisições</span>
             <div class="hero-kpi-icon-wrap">
@@ -436,16 +524,16 @@ class PlurixApp {
           </div>
           <div class="hero-kpi-val">${Number(k.totalSolicitacoes || 0).toLocaleString('pt-BR')}</div>
           <div class="hero-kpi-sub">
-            <span>Spot Mat: <strong>${Number(k.totalSpotMateriais || 0).toLocaleString('pt-BR')}</strong></span>
+            <span>Mat: <strong>${Number(k.totalSpotMateriais || 0).toLocaleString('pt-BR')}</strong></span>
             <span>·</span>
-            <span>Spot Serv: <strong>${Number(k.totalSpotServicos || 0).toLocaleString('pt-BR')}</strong></span>
+            <span>Serv: <strong>${Number(k.totalSpotServicos || 0).toLocaleString('pt-BR')}</strong></span>
             <span>·</span>
             <span>Estrat: <strong>${Number(k.totalEstrategicas || 0).toLocaleString('pt-BR')}</strong></span>
           </div>
         </div>
 
-        <!-- CARD 2: REQUISIÇÕES EM ABERTO -->
-        <div class="hero-kpi-card kpi-amber">
+        <!-- CARD 2: REQUISIÇÕES EM ABERTO (INTERATIVO) -->
+        <div class="hero-kpi-card kpi-amber btn-jump-to-tab" data-tab="workflow" style="cursor:pointer;" title="Clique para ver o Workflow detalhado">
           <div class="hero-kpi-header">
             <span class="hero-kpi-label" style="color:var(--amber);">Requisições em Aberto</span>
             <div class="hero-kpi-icon-wrap" style="background:var(--amber-bg); color:var(--amber);">
@@ -459,8 +547,8 @@ class PlurixApp {
           </div>
         </div>
 
-        <!-- CARD 3: SLA MÉDIO COTAÇÃO -->
-        <div class="hero-kpi-card kpi-primary">
+        <!-- CARD 3: SLA MÉDIO COTAÇÃO (INTERATIVO) -->
+        <div class="hero-kpi-card kpi-primary btn-jump-to-tab" data-tab="compradores" style="cursor:pointer;" title="Clique para ver o desempenho dos compradores">
           <div class="hero-kpi-header">
             <span class="hero-kpi-label">SLA Médio de Cotação</span>
             <div class="hero-kpi-icon-wrap">
@@ -469,27 +557,21 @@ class PlurixApp {
           </div>
           <div class="hero-kpi-val" style="color:var(--plx-accent);">${k.slaCotacaoMedio || 0}<span style="font-size:14px; font-weight:700; color:var(--text-muted); margin-left:2px;">dias</span></div>
           <div class="hero-kpi-sub">
-            <span>Meta Geral: <strong>${k.metaSlaCotacao || 6}d</strong></span>
-            <span class="sla-badge ${k.gapSlaCotacao <= 0 ? 'fast' : 'slow'}" style="font-size:10px; padding:2px 6px;">
-              ${k.gapSlaCotacao <= 0 ? 'No Prazo' : `+${k.gapSlaCotacao}d acima`}
-            </span>
+            <span style="color:var(--text-secondary); font-size:11px;">Média real em dias corridos</span>
           </div>
         </div>
 
-        <!-- CARD 4: CONFORMIDADE DE SLA -->
-        <div class="hero-kpi-card ${k.taxaConformidadePct >= 85 ? 'kpi-emerald' : 'kpi-amber'}">
+        <!-- CARD 4: CONFORMIDADE DE SLA (INTERATIVO) -->
+        <div class="hero-kpi-card kpi-emerald btn-jump-to-tab" data-tab="alertasSla" style="cursor:pointer;" title="Clique para ver o Radar de Alertas">
           <div class="hero-kpi-header">
             <span class="hero-kpi-label">Taxa de Conformidade</span>
-            <div class="hero-kpi-icon-wrap" style="background:${k.taxaConformidadePct >= 85 ? 'var(--emerald-bg)' : 'var(--amber-bg)'}; color:${k.taxaConformidadePct >= 85 ? 'var(--emerald)' : 'var(--amber)'};">
+            <div class="hero-kpi-icon-wrap" style="background:var(--emerald-bg); color:var(--emerald);">
               <i data-lucide="shield-check" style="width:14px; height:14px;"></i>
             </div>
           </div>
-          <div class="hero-kpi-val" style="color:${k.taxaConformidadePct >= 85 ? 'var(--emerald)' : 'var(--amber)'};">${Math.round(k.taxaConformidadePct || 0)}<span style="font-size:16px;">%</span></div>
+          <div class="hero-kpi-val" style="color:var(--emerald);">${Math.round(k.taxaConformidadePct || 0)}<span style="font-size:16px;">%</span></div>
           <div class="hero-kpi-sub">
-            <span>Meta Oficial: <strong>85%</strong></span>
-            <span class="sla-badge ${k.gapConformidade >= 0 ? 'fast' : 'slow'}" style="font-size:10px; padding:2px 6px;">
-              ${k.gapConformidade >= 0 ? 'Meta Atingida' : 'Abaixo da meta'}
-            </span>
+            <span style="color:var(--text-secondary); font-size:11px;"><strong>${Number(k.totalDentroSla || 0).toLocaleString('pt-BR')}</strong> de <strong>${Number(k.totalComSla || 0).toLocaleString('pt-BR')}</strong> no prazo</span>
           </div>
         </div>
 
@@ -498,126 +580,140 @@ class PlurixApp {
       <!-- =====================================================================
            NÍVEL 2: MODALIDADES DE COMPRA & RADAR DE RISCO (2 COLUNAS)
            ===================================================================== -->
-      <div class="exec-grid-2" style="margin-bottom:20px;">
+      <div class="exec-grid-2" style="margin-bottom:16px;">
         
         <!-- COLUNA 1: MODALIDADES DE COMPRA -->
-        <div class="card">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <div class="card" style="padding:16px 18px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
             <div>
-              <div class="card-title">📦 Desempenho por Modalidade de Compra</div>
+              <div class="card-title" style="font-size:13.5px;">📦 Desempenho por Modalidade de Compra</div>
               <div class="card-subtitle">Volume, prazos médios e conformidade por modalidade de aquisição</div>
             </div>
-            <span class="tag-pill" style="font-size:11px; font-weight:800;">Metas Oficiais</span>
+            <span class="tag-pill" style="font-size:10px; padding:2px 8px;">Metas Oficiais</span>
           </div>
 
-          <div style="display:flex; flex-direction:column; gap:10px;">
+          <div style="display:flex; flex-direction:column; gap:8px;">
             <!-- Spot Materiais -->
-            <div style="background:var(--surface-subtle); border:1px solid var(--border-subtle); border-radius:var(--radius-sm); padding:12px 14px; border-left:3px solid var(--plx-primary);">
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <div style="background:var(--surface-subtle); border:1px solid var(--border-subtle); border-radius:6px; padding:10px 14px; border-left:3px solid var(--plx-primary);">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                 <div style="display:flex; align-items:center; gap:8px;">
-                  <strong style="font-size:13px; color:var(--text-primary);">Spot Materiais</strong>
-                  <span class="tag-pill" style="font-size:10px; padding:2px 6px;">Meta: 10d</span>
+                  <strong style="font-size:12.5px; color:var(--text-primary);">Spot Materiais</strong>
+                  <span class="tag-pill" style="font-size:9.5px; padding:1px 5px;">Meta: 10d</span>
                 </div>
-                <span class="sla-badge ${mod.spotMateriais?.conformidadePct >= 85 ? 'fast' : 'warning'}" style="font-size:11px;">
+                <span class="sla-badge ${mod.spotMateriais?.conformidadePct >= 85 ? 'fast' : 'warning'}" style="font-size:10.5px;">
                   ${Math.round(mod.spotMateriais?.conformidadePct || 0)}% no prazo
                 </span>
               </div>
-              <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px; color:var(--text-secondary);">
-                <span>Volume: <strong>${Number(mod.spotMateriais?.total || 0).toLocaleString('pt-BR')}</strong> · Em Aberto: <strong>${Number(mod.spotMateriais?.backlog || 0).toLocaleString('pt-BR')}</strong></span>
+              <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--text-secondary);">
+                <span>Volume: <strong>${Number(mod.spotMateriais?.total || 0).toLocaleString('pt-BR')}</strong> · Aberto: <strong>${Number(mod.spotMateriais?.backlog || 0).toLocaleString('pt-BR')}</strong></span>
                 <span>SLA Médio: <strong style="color:var(--plx-accent);">${mod.spotMateriais?.slaMedio || 0} dias</strong></span>
               </div>
             </div>
 
             <!-- Spot Serviços -->
-            <div style="background:var(--surface-subtle); border:1px solid var(--border-subtle); border-radius:var(--radius-sm); padding:12px 14px; border-left:3px solid var(--plx-accent);">
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <div style="background:var(--surface-subtle); border:1px solid var(--border-subtle); border-radius:6px; padding:10px 14px; border-left:3px solid var(--plx-accent);">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                 <div style="display:flex; align-items:center; gap:8px;">
-                  <strong style="font-size:13px; color:var(--text-primary);">Spot Serviços</strong>
-                  <span class="tag-pill" style="font-size:10px; padding:2px 6px;">Meta: 15d</span>
+                  <strong style="font-size:12.5px; color:var(--text-primary);">Spot Serviços</strong>
+                  <span class="tag-pill" style="font-size:9.5px; padding:1px 5px;">Meta: 15d</span>
                 </div>
-                <span class="sla-badge ${mod.spotServicos?.conformidadePct >= 85 ? 'fast' : 'warning'}" style="font-size:11px;">
+                <span class="sla-badge ${mod.spotServicos?.conformidadePct >= 85 ? 'fast' : 'warning'}" style="font-size:10.5px;">
                   ${Math.round(mod.spotServicos?.conformidadePct || 0)}% no prazo
                 </span>
               </div>
-              <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px; color:var(--text-secondary);">
-                <span>Volume: <strong>${Number(mod.spotServicos?.total || 0).toLocaleString('pt-BR')}</strong> · Em Aberto: <strong>${Number(mod.spotServicos?.backlog || 0).toLocaleString('pt-BR')}</strong></span>
+              <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--text-secondary);">
+                <span>Volume: <strong>${Number(mod.spotServicos?.total || 0).toLocaleString('pt-BR')}</strong> · Aberto: <strong>${Number(mod.spotServicos?.backlog || 0).toLocaleString('pt-BR')}</strong></span>
                 <span>SLA Médio: <strong style="color:var(--plx-accent);">${mod.spotServicos?.slaMedio || 0} dias</strong></span>
               </div>
             </div>
 
             <!-- Estratégico -->
-            <div style="background:var(--surface-subtle); border:1px solid var(--border-subtle); border-radius:var(--radius-sm); padding:12px 14px; border-left:3px solid var(--amber);">
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <div style="background:var(--surface-subtle); border:1px solid var(--border-subtle); border-radius:6px; padding:10px 14px; border-left:3px solid var(--amber);">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                 <div style="display:flex; align-items:center; gap:8px;">
-                  <strong style="font-size:13px; color:var(--text-primary);">Estratégico</strong>
-                  <span class="tag-pill" style="font-size:10px; padding:2px 6px;">Meta: 45d</span>
+                  <strong style="font-size:12.5px; color:var(--text-primary);">Estratégico</strong>
+                  <span class="tag-pill" style="font-size:9.5px; padding:1px 5px;">Meta: 45d</span>
                 </div>
-                <span class="sla-badge ${mod.estrategica?.conformidadePct >= 85 ? 'fast' : 'warning'}" style="font-size:11px;">
+                <span class="sla-badge ${mod.estrategica?.conformidadePct >= 85 ? 'fast' : 'warning'}" style="font-size:10.5px;">
                   ${Math.round(mod.estrategica?.conformidadePct || 0)}% no prazo
                 </span>
               </div>
-              <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px; color:var(--text-secondary);">
-                <span>Volume: <strong>${Number(mod.estrategica?.total || 0).toLocaleString('pt-BR')}</strong> · Em Aberto: <strong>${Number(mod.estrategica?.backlog || 0).toLocaleString('pt-BR')}</strong></span>
+              <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--text-secondary);">
+                <span>Volume: <strong>${Number(mod.estrategica?.total || 0).toLocaleString('pt-BR')}</strong> · Aberto: <strong>${Number(mod.estrategica?.backlog || 0).toLocaleString('pt-BR')}</strong></span>
                 <span>SLA Médio: <strong style="color:var(--plx-accent);">${mod.estrategica?.slaMedio || 0} dias</strong></span>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- COLUNA 2: RADAR DE RISCO & SLA (RESUMO OPERACIONAL ATIVO) -->
-        <div class="card">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
-            <div>
-              <div class="card-title">⚡ Radar de Risco &amp; Vencimentos</div>
-              <div class="card-subtitle">Chamados ativos classificados por urgência de atendimento</div>
+        <!-- COLUNA 2: RADAR DE RISCO & SLA (CLEAN & INTERATIVO) -->
+        <div class="card" style="padding:16px 18px; display:flex; flex-direction:column; justify-content:space-between;">
+          <div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <div>
+                <div class="card-title" style="font-size:13.5px;">⚡ Radar de Risco &amp; Vencimentos</div>
+                <div class="card-subtitle">Chamados ativos classificados por urgência de atendimento</div>
+              </div>
+              <button class="btn btn-subtle btn-sm btn-nav-to-alerts" style="font-size:11px; font-weight:700; padding:4px 8px;">
+                <span>Ver Radar</span>
+                <i data-lucide="arrow-right" style="width:12px; height:12px;"></i>
+              </button>
             </div>
-            <button class="btn btn-subtle btn-sm btn-nav-to-alerts" style="font-size:11.5px; font-weight:700;">
-              <span>Ver Radar Completo</span>
-              <i data-lucide="arrow-right" style="width:12px; height:12px;"></i>
-            </button>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;">
+              <div class="radar-ranking-item btn-jump-to-alert" data-urgency="vencido" style="cursor:pointer; padding:10px 12px; border-left:3px solid var(--coral);" title="Ver chamados vencidos">
+                <div>
+                  <div style="font-size:18px; font-weight:900; color:var(--coral); line-height:1.1;">
+                    ${Number(radar.vencidos || 0).toLocaleString('pt-BR')}
+                  </div>
+                  <div style="font-size:10.5px; font-weight:700; color:var(--text-muted); margin-top:2px;">
+                    Já Estourados
+                  </div>
+                </div>
+                <span class="pulse-badge vencido" style="font-size:9.5px; padding:1px 5px;">Crítico</span>
+              </div>
+
+              <div class="radar-ranking-item btn-jump-to-alert" data-urgency="critico_24h" style="cursor:pointer; padding:10px 12px; border-left:3px solid #F97316;" title="Ver chamados que vencem em < 24h">
+                <div>
+                  <div style="font-size:18px; font-weight:900; color:#F97316; line-height:1.1;">
+                    ${Number(radar.critico24h || 0).toLocaleString('pt-BR')}
+                  </div>
+                  <div style="font-size:10.5px; font-weight:700; color:var(--text-muted); margin-top:2px;">
+                    Vence em &lt; 24h
+                  </div>
+                </div>
+                <span class="pulse-badge critico_24h" style="font-size:9.5px; padding:1px 5px;">Atenção</span>
+              </div>
+
+              <div class="radar-ranking-item btn-jump-to-alert" data-urgency="alerta_72h" style="cursor:pointer; padding:10px 12px; border-left:3px solid var(--amber);" title="Ver chamados que vencem em 24h-72h">
+                <div>
+                  <div style="font-size:18px; font-weight:900; color:var(--amber); line-height:1.1;">
+                    ${Number(radar.alerta72h || 0).toLocaleString('pt-BR')}
+                  </div>
+                  <div style="font-size:10.5px; font-weight:700; color:var(--text-muted); margin-top:2px;">
+                    Vence 24h-72h
+                  </div>
+                </div>
+                <span class="pulse-badge alerta_72h" style="font-size:9.5px; padding:1px 5px;">Alerta</span>
+              </div>
+
+              <div class="radar-ranking-item btn-jump-to-alert" data-urgency="no_prazo" style="cursor:pointer; padding:10px 12px; border-left:3px solid var(--emerald);" title="Ver chamados no prazo">
+                <div>
+                  <div style="font-size:18px; font-weight:900; color:var(--emerald); line-height:1.1;">
+                    ${Number(radar.noPrazo || 0).toLocaleString('pt-BR')}
+                  </div>
+                  <div style="font-size:10.5px; font-weight:700; color:var(--text-muted); margin-top:2px;">
+                    No Prazo Seguro
+                  </div>
+                </div>
+                <span class="pulse-badge no_prazo" style="font-size:9.5px; padding:1px 5px;">OK</span>
+              </div>
+            </div>
           </div>
 
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
-            <div style="background:rgba(239, 68, 68, 0.1); border:1px solid rgba(239, 68, 68, 0.3); border-radius:var(--radius-sm); padding:12px; text-align:center;">
-              <div style="font-size:22px; font-weight:900; color:var(--coral); line-height:1.1;">
-                ${Number(radar.vencidos || 0).toLocaleString('pt-BR')}
-              </div>
-              <div style="font-size:11px; font-weight:800; color:var(--coral); text-transform:uppercase; margin-top:2px;">
-                🔴 Já Estourados
-              </div>
-            </div>
-
-            <div style="background:rgba(249, 115, 22, 0.1); border:1px solid rgba(249, 115, 22, 0.3); border-radius:var(--radius-sm); padding:12px; text-align:center;">
-              <div style="font-size:22px; font-weight:900; color:#F97316; line-height:1.1;">
-                ${Number(radar.critico24h || 0).toLocaleString('pt-BR')}
-              </div>
-              <div style="font-size:11px; font-weight:800; color:#F97316; text-transform:uppercase; margin-top:2px;">
-                🟠 Vence em &lt; 24h
-              </div>
-            </div>
-
-            <div style="background:rgba(245, 158, 11, 0.1); border:1px solid rgba(245, 158, 11, 0.3); border-radius:var(--radius-sm); padding:12px; text-align:center;">
-              <div style="font-size:22px; font-weight:900; color:var(--amber); line-height:1.1;">
-                ${Number(radar.alerta72h || 0).toLocaleString('pt-BR')}
-              </div>
-              <div style="font-size:11px; font-weight:800; color:var(--amber); text-transform:uppercase; margin-top:2px;">
-                🟡 Vence em 24h-72h
-              </div>
-            </div>
-
-            <div style="background:rgba(16, 185, 129, 0.1); border:1px solid rgba(16, 185, 129, 0.3); border-radius:var(--radius-sm); padding:12px; text-align:center;">
-              <div style="font-size:22px; font-weight:900; color:var(--emerald); line-height:1.1;">
-                ${Number(radar.noPrazo || 0).toLocaleString('pt-BR')}
-              </div>
-              <div style="font-size:11px; font-weight:800; color:var(--emerald); text-transform:uppercase; margin-top:2px;">
-                🟢 No Prazo Seguro
-              </div>
-            </div>
-          </div>
-
-          <div style="background:var(--surface-subtle); border-radius:var(--radius-sm); padding:10px 12px; font-size:11.5px; color:var(--text-secondary); display:flex; justify-content:space-between; align-items:center;">
-            <span>Total de chamados ativos sob gestão:</span>
-            <strong style="color:var(--text-primary); font-size:12.5px;">${Number(radar.totalAtivos || 0).toLocaleString('pt-BR')} solicitações</strong>
+          <div style="background:var(--surface-subtle); border-radius:6px; padding:8px 12px; font-size:11px; color:var(--text-secondary); display:flex; justify-content:space-between; align-items:center;">
+            <span>Total de solicitações ativas em cotação:</span>
+            <strong style="color:var(--text-primary); font-size:12px;">${Number(radar.totalAtivos || 0).toLocaleString('pt-BR')} solicitações</strong>
           </div>
         </div>
 
@@ -629,33 +725,30 @@ class PlurixApp {
       <div class="exec-grid-2">
         
         <!-- COLUNA 1: REDES INVESTIDAS -->
-        <div class="card">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <div class="card" style="padding:16px 18px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
             <div>
-              <div class="card-title">🏢 Panorama por Rede Investida</div>
+              <div class="card-title" style="font-size:13.5px;">🏢 Panorama por Rede Investida</div>
               <div class="card-subtitle">Demanda, fila e tempo médio de atendimento por unidade</div>
             </div>
-            <span style="font-size:11.5px; color:var(--text-muted);">${rankingInvestidas.length} Redes</span>
+            <span style="font-size:11px; color:var(--text-muted);">${rankingInvestidas.length} Redes</span>
           </div>
 
-          <div style="display:flex; flex-direction:column; gap:8px;">
+          <div style="display:flex; flex-direction:column; gap:6px;">
             ${rankingInvestidas.map(inv => `
-              <div class="investida-rank-item btn-open-investida" data-investida="${inv.investida}" style="background:var(--surface-subtle); border:1px solid var(--border-subtle); border-radius:var(--radius-sm); padding:10px 12px; cursor:pointer;">
-                <div style="display:flex; justify-content:space-between; width:100%; align-items:center; margin-bottom:4px;">
+              <div class="radar-ranking-item btn-open-investida" data-investida="${inv.investida}" style="cursor:pointer;" title="Clique para ver o raio-x da rede ${inv.investida}">
+                <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
                   <div style="display:flex; align-items:center; gap:8px;">
-                    <i data-lucide="store" style="width:14px; height:14px; color:var(--plx-accent);"></i>
-                    <strong style="color:var(--text-primary); font-size:12.5px;">${inv.investida}</strong>
+                    <i data-lucide="store" style="width:13px; height:13px; color:var(--plx-accent);"></i>
+                    <strong style="color:var(--text-primary); font-size:12px;">${inv.investida}</strong>
+                    <span style="font-size:10.5px; color:var(--text-muted);">(${inv.total_solicitacoes} reqs · ${inv.backlog_ativo} aberto)</span>
                   </div>
-                  <span class="sla-badge ${inv.taxa_conformidade_pct >= 85 ? 'fast' : (inv.taxa_conformidade_pct >= 70 ? 'warning' : 'slow')}" style="font-size:10.5px;">
-                    ${Math.round(inv.taxa_conformidade_pct || 0)}% no prazo
-                  </span>
-                </div>
-                <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--text-secondary); margin-bottom:6px;">
-                  <span>Vol: <strong>${Number(inv.total_solicitacoes).toLocaleString('pt-BR')}</strong> · Aberto: <strong>${inv.backlog_ativo}</strong></span>
-                  <span>SLA Cotação: <strong>${inv.sla_cotacao_medio || 0}d</strong></span>
-                </div>
-                <div style="width:100%; background:rgba(255,255,255,0.06); height:4px; border-radius:2px; overflow:hidden;">
-                  <div style="width:${inv.taxa_conformidade_pct}%; background:${inv.taxa_conformidade_pct >= 85 ? 'var(--emerald)' : (inv.taxa_conformidade_pct >= 70 ? 'var(--amber)' : 'var(--coral)')}; height:100%;"></div>
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:11px; color:var(--text-secondary);">SLA: <strong>${inv.sla_cotacao_medio || 0}d</strong></span>
+                    <span class="sla-badge ${inv.taxa_conformidade_pct >= 85 ? 'fast' : (inv.taxa_conformidade_pct >= 70 ? 'warning' : 'slow')}" style="font-size:10px; padding:2px 6px;">
+                      ${Math.round(inv.taxa_conformidade_pct || 0)}%
+                    </span>
+                  </div>
                 </div>
               </div>
             `).join('')}
@@ -663,34 +756,32 @@ class PlurixApp {
         </div>
 
         <!-- COLUNA 2: GESTÃO DE CARGA DA EQUIPE (COMPRADORES) -->
-        <div class="card">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <div class="card" style="padding:16px 18px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
             <div>
-              <div class="card-title">👥 Gestão de Carga da Equipe de Compras</div>
+              <div class="card-title" style="font-size:13.5px;">👥 Gestão de Carga da Equipe de Compras</div>
               <div class="card-subtitle">Compradores com maior fila ativa no período para balanceamento</div>
             </div>
-            <span style="font-size:11px; color:var(--text-muted);">Clique para ver Raio-X</span>
+            <span style="font-size:11px; color:var(--text-muted);">Top 5 Fila</span>
           </div>
 
-          <div style="display:flex; flex-direction:column; gap:8px;">
+          <div style="display:flex; flex-direction:column; gap:6px;">
             ${topBacklog.slice(0, 5).map((b, idx) => `
-              <div class="buyer-lead-row btn-open-buyer" data-comprador="${b.comprador}" style="cursor:pointer;">
-                <div style="display:flex; align-items:center; gap:10px;">
-                  <span style="font-size:11.5px; font-weight:900; color:var(--text-muted); width:16px;">#${idx + 1}</span>
-                  <div class="buyer-avatar" style="width:28px; height:28px; font-size:10px; background:var(--plx-primary);">${this.getInitials(b.comprador)}</div>
+              <div class="radar-ranking-item btn-open-buyer" data-comprador="${b.comprador}" style="cursor:pointer;" title="Clique para abrir o Raio-X de ${b.comprador}">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span style="font-size:11px; font-weight:800; color:var(--text-muted); width:14px;">#${idx + 1}</span>
+                  <div class="buyer-avatar" style="width:24px; height:24px; font-size:9.5px; border-radius:6px; background:var(--plx-primary);">${this.getInitials(b.comprador)}</div>
                   <div>
-                    <div style="font-size:12.5px; font-weight:800; color:var(--text-primary);">${b.comprador}</div>
-                    <div style="font-size:10.5px; color:var(--text-muted);">${b.total_solicitacoes} total · SLA: ${b.sla_cotacao_medio}d</div>
+                    <div style="font-size:12px; font-weight:700; color:var(--text-primary);">${b.comprador}</div>
+                    <div style="font-size:10px; color:var(--text-muted);">${b.total_solicitacoes} total · SLA: ${b.sla_cotacao_medio}d</div>
                   </div>
                 </div>
-                <div style="display:flex; align-items:center; gap:10px;">
+                <div style="display:flex; align-items:center; gap:8px;">
                   <div style="text-align:right;">
-                    <strong style="color:var(--amber); font-size:13px;">${Number(b.backlog_ativo).toLocaleString('pt-BR')}</strong>
-                    <div style="font-size:9.5px; color:var(--text-muted);">em aberto</div>
+                    <strong style="color:var(--amber); font-size:12.5px;">${Number(b.backlog_ativo).toLocaleString('pt-BR')}</strong>
+                    <span style="font-size:9.5px; color:var(--text-muted); margin-left:2px;">aberto</span>
                   </div>
-                  <button class="btn btn-primary btn-sm" style="padding:4px 8px; font-size:11px;">
-                    Raio-X
-                  </button>
+                  <i data-lucide="chevron-right" style="width:14px; height:14px; color:var(--text-muted); opacity:0.6;"></i>
                 </div>
               </div>
             `).join('')}
@@ -712,6 +803,21 @@ class PlurixApp {
       btn.addEventListener('click', () => {
         const inv = btn.dataset.investida;
         if (inv) this.openInvestidaDetailModal(inv);
+      });
+    });
+
+    container.querySelectorAll('.btn-jump-to-tab').forEach(el => {
+      el.addEventListener('click', () => {
+        const tab = el.dataset.tab;
+        if (tab) this.switchTab(tab);
+      });
+    });
+
+    container.querySelectorAll('.btn-jump-to-alert').forEach(el => {
+      el.addEventListener('click', () => {
+        const urgency = el.dataset.urgency;
+        this.state.alertasUrgencia = urgency;
+        this.switchTab('alertasSla');
       });
     });
 
@@ -739,50 +845,8 @@ class PlurixApp {
     }
 
     const buyers = data.compradores || [];
-    const dest = data.destaquesExecutivos || {};
 
     container.innerHTML = `
-      <!-- 4 CARDS DESTAQUES RÁPIDOS -->
-      <div class="buyers-highlight-grid">
-        
-        <div class="buyer-highlight-card destaque-emerald">
-          <div class="buyer-card-header" style="color:var(--emerald);">
-            <i data-lucide="award" style="width:13px; height:13px;"></i>
-            <span>🏆 Melhor SLA / Eficiência</span>
-          </div>
-          <div class="buyer-card-name">${dest.topPerformer?.comprador || 'Equipe em Nivelamento'}</div>
-          <div class="buyer-card-sub">SLA Médio: <strong>${dest.topPerformer?.slaCotacaoMedio || 0} dias</strong> (${dest.topPerformer?.taxaConformidadePct || 100}% no prazo)</div>
-        </div>
-
-        <div class="buyer-highlight-card destaque-amber">
-          <div class="buyer-card-header" style="color:var(--amber);">
-            <i data-lucide="alert-octagon" style="width:13px; height:13px;"></i>
-            <span>⚠️ Maior Fila em Aberto</span>
-          </div>
-          <div class="buyer-card-name">${dest.sobrecarga?.comprador || 'Sem Sobrecarga'}</div>
-          <div class="buyer-card-sub">Em Aberto: <strong>${Number(dest.sobrecarga?.backlogAtivo || 0).toLocaleString('pt-BR')} solicitações</strong></div>
-        </div>
-
-        <div class="buyer-highlight-card destaque-accent">
-          <div class="buyer-card-header" style="color:var(--plx-accent);">
-            <i data-lucide="zap" style="width:13px; height:13px;"></i>
-            <span>📈 Maior Produtividade</span>
-          </div>
-          <div class="buyer-card-name">${dest.maiorVolume?.comprador || 'N/A'}</div>
-          <div class="buyer-card-sub">Volume: <strong>${Number(dest.maiorVolume?.totalSolicitacoes || 0).toLocaleString('pt-BR')} requisições</strong></div>
-        </div>
-
-        <div class="buyer-highlight-card destaque-coral">
-          <div class="buyer-card-header" style="color:var(--coral);">
-            <i data-lucide="clock" style="width:13px; height:13px;"></i>
-            <span>⏱️ Atenção ao SLA</span>
-          </div>
-          <div class="buyer-card-name">${dest.necessitaSuporte?.comprador || 'N/A'}</div>
-          <div class="buyer-card-sub">SLA Médio: <strong>${dest.necessitaSuporte?.slaCotacaoMedio || 0} dias</strong></div>
-        </div>
-
-      </div>
-
       <!-- TABELA DE COMPRADORES -->
       <div class="table-panel">
         <div class="table-toolbar">
@@ -1169,13 +1233,16 @@ class PlurixApp {
         let filtrados = this._buyerChamados;
         if (this._buyerFilterStatus !== 'todos') {
           if (this._buyerFilterStatus === 'concluidos') {
-            filtrados = filtrados.filter(c => c.status_nome === 'Encerrado' || c.status_nome === 'Pedido Enviado');
+            filtrados = filtrados.filter(c => this.getTicketSlaEvaluation(c).isFinished);
           } else if (this._buyerFilterStatus === 'cotacao') {
-            filtrados = filtrados.filter(c => c.status_nome === 'Cotacao');
+            filtrados = filtrados.filter(c => this.getTicketSlaEvaluation(c).isEmCotacao);
           } else if (this._buyerFilterStatus === 'aprovacao') {
-            filtrados = filtrados.filter(c => c.status_nome === 'Aprovacao');
+            filtrados = filtrados.filter(c => {
+              const st = (c.status_nome || '').toLowerCase();
+              return st.includes('aprov') || st.includes('valid');
+            });
           } else if (this._buyerFilterStatus === 'atrasados') {
-            filtrados = filtrados.filter(c => (c.aging_dias || c.dias_na_etapa || 0) > (c.meta_sla_dias || 10));
+            filtrados = filtrados.filter(c => this.getTicketSlaEvaluation(c).isOver);
           }
         }
 
@@ -1244,13 +1311,11 @@ class PlurixApp {
               </div>
             </div>
 
-            <div class="dossier-kpi-card ${r.taxa_conformidade_pct >= 85 ? 'emerald' : 'amber'}">
+            <div class="dossier-kpi-card emerald">
               <div class="dossier-kpi-title">Taxa de Conformidade</div>
-              <div class="dossier-kpi-number" style="color:${r.taxa_conformidade_pct >= 85 ? 'var(--emerald)' : 'var(--amber)'};">${Math.round(r.taxa_conformidade_pct || 100)}%</div>
+              <div class="dossier-kpi-number" style="color:var(--emerald);">${Math.round(r.taxa_conformidade_pct || 100)}%</div>
               <div class="dossier-kpi-sub">
-                <span class="sla-badge ${r.taxa_conformidade_pct >= 85 ? 'fast' : 'slow'}" style="font-size:10px;">
-                  ${r.taxa_conformidade_pct >= 85 ? 'Meta de 85% Atingida' : 'Abaixo da meta'}
-                </span>
+                <span style="color:var(--text-secondary); font-size:11px;"><strong>${Number(r.dentro_sla_count || 0).toLocaleString('pt-BR')}</strong> de <strong>${Number(r.com_sla || 0).toLocaleString('pt-BR')}</strong> no prazo</span>
               </div>
             </div>
           </div>
@@ -1280,7 +1345,7 @@ class PlurixApp {
                       Vol: <strong>${Number(inv.total_solicitacoes).toLocaleString('pt-BR')}</strong> · Aberto: <strong>${Number(inv.backlog_ativo).toLocaleString('pt-BR')}</strong>
                     </div>
                     <div style="font-size:10.5px; color:var(--text-secondary); margin-bottom:6px;">
-                      Spot: <strong>${inv.qtd_spot || 0}</strong> · Estratégica: <strong>${inv.qtd_estrategica || 0}</strong>
+                      Mat: <strong>${inv.qtd_spot_mat || 0}</strong> · Serv: <strong>${inv.qtd_spot_serv || 0}</strong> · Estrat: <strong>${inv.qtd_estrategica || 0}</strong>
                     </div>
                     <div style="display:flex; justify-content:space-between; align-items:center; padding-top:6px; border-top:1px solid var(--border-subtle);">
                       <span style="font-size:11px; color:var(--text-secondary);">SLA Cotação:</span>
@@ -1337,27 +1402,32 @@ class PlurixApp {
                       </td>
                     </tr>
                   ` : filtrados.map(ch => {
-                    const isOver = (ch.aging_dias || ch.dias_na_etapa || 0) > (ch.meta_sla_dias || 10);
-                    const isFinished = ch.status_nome === 'Encerrado' || ch.status_nome === 'Pedido Enviado' || ch.status_nome === 'Aguardando Entrega';
+                    const ev = this.getTicketSlaEvaluation(ch);
                     const dtCell = (val, color) => val
                       ? `<span style="font-size:11px; color:${color || 'var(--text-secondary)'}; font-weight:600;">${this.formatDate(val)}</span>`
                       : `<span style="font-size:11px; color:var(--text-dim); opacity:0.45;">—</span>`;
+
+                    // Data de Cotação: exibe se já iniciou cotação
+                    const displayDtCotacao = ch.data_cotacao || (ev.isEmCotacao || ev.isPosCotacao ? ch.data_criacao : null);
+                    // Data de Pedido Enviado: exibe se já concluiu cotação/pedido
+                    const displayDtPedido = ch.data_aprovacao_pedido || (ev.isFinished ? ch.data_aprovacao : null);
+
                     return `
                       <tr>
                         <td>
                           <strong style="color:var(--plx-accent); font-size:12px;">${ch.numero_solicitacao || `#ORG-${ch.id}`}</strong>
                         </td>
-                        <td>${dtCell(ch.data_cotacao || ch.data_criacao, 'var(--text-secondary)')}</td>
-                        <td>${dtCell(ch.data_aprovacao_pedido, 'var(--sky)')}</td>
+                        <td>${dtCell(displayDtCotacao, 'var(--text-secondary)')}</td>
+                        <td>${dtCell(displayDtPedido, 'var(--sky)')}</td>
                         <td>
-                          <span class="sla-badge ${isFinished ? 'fast' : (ch.status_nome === 'Cotacao' ? 'warning' : 'regular')}">
+                          <span class="sla-badge ${ev.isFinished ? 'fast' : (ev.isEmCotacao ? 'warning' : 'regular')}">
                             ${ch.status_nome}
                           </span>
                         </td>
                         <td>
                           ${ch.data_finalizacao
                             ? `<span style="font-size:11px; color:var(--emerald); font-weight:700;">${this.formatDate(ch.data_finalizacao)}</span>`
-                            : (isFinished ? `<span style="font-size:10.5px; color:var(--emerald); font-weight:700;">Concluído</span>` : `<span style="font-size:10.5px; color:var(--amber); font-weight:700; background:var(--surface-subtle); padding:2px 6px; border-radius:4px;">Em aberto</span>`)}
+                            : (ev.isFinished ? `<span style="font-size:10.5px; color:var(--emerald); font-weight:700;">Concluído</span>` : (ev.isPreCotacao ? `<span style="font-size:10.5px; color:var(--text-muted); font-weight:600; background:var(--surface-subtle); padding:2px 6px; border-radius:4px;">Pré-Cotação</span>` : `<span style="font-size:10.5px; color:var(--amber); font-weight:700; background:rgba(245,158,11,0.12); padding:2px 6px; border-radius:4px;">Em aberto</span>`))}
                         </td>
                         <td>
                           <strong style="color:var(--text-primary); font-size:12px;">${ch.investida_nome}</strong>
@@ -1365,17 +1435,11 @@ class PlurixApp {
                         <td>
                           <div style="font-weight:700; color:var(--text-primary); font-size:12px;">${ch.categoria}</div>
                           <div style="font-size:10px; color:var(--text-muted); margin-top:1px;">
-                            ${ch.modalidade_compra || 'Spot'} · <span style="color:var(--text-secondary);">Meta: ${ch.meta_sla_dias || 10}d</span>
+                            ${ch.modalidade_compra || 'Spot'} · <span style="color:var(--text-secondary);">Meta: ${ev.meta}d</span>
                           </div>
                         </td>
                         <td class="center">
-                          <strong style="color:${isFinished ? (isOver ? 'var(--coral)' : 'var(--emerald)') : (isOver ? 'var(--coral)' : 'var(--amber)')}; font-size:12.5px;">
-                            ${Math.round(ch.dias_atendimento_sla || ch.aging_dias || 0)}d
-                          </strong>
-                          <span style="font-size:10px; color:var(--text-muted);">/ ${ch.meta_sla_dias || 10}d</span>
-                          <div style="font-size:9.5px; color:${isFinished ? 'var(--emerald)' : (isOver ? 'var(--coral)' : 'var(--text-muted)')}; font-weight:700;">
-                            ${isFinished ? 'Atendido' : (isOver ? `+${Math.round((ch.dias_atendimento_sla || ch.aging_dias || 0) - (ch.meta_sla_dias || 10))}d acima` : 'No prazo')}
-                          </div>
+                          ${ev.badgeHtml}
                         </td>
                       </tr>
                     `;
@@ -1553,7 +1617,7 @@ class PlurixApp {
             </div>
 
             <div style="font-size:10.5px; color:var(--text-muted); margin-bottom:8px;">
-              Spot: <strong>${inv.qtd_spot || 0}</strong> · Estratégica: <strong>${inv.qtd_estrategica || 0}</strong>
+              Mat: <strong>${inv.qtd_spot_mat || 0}</strong> · Serv: <strong>${inv.qtd_spot_serv || 0}</strong> · Estrat: <strong>${inv.qtd_estrategica || 0}</strong>
             </div>
 
             <div style="background:var(--surface-subtle); height:6px; border-radius:3px; overflow:hidden;">
@@ -1586,7 +1650,7 @@ class PlurixApp {
                 <tr>
                   <td>
                     <strong style="color:var(--text-primary); font-size:13px;">${inv.investida}</strong>
-                    <div style="font-size:10px; color:var(--text-muted);">Spot: ${inv.qtd_spot || 0} · Estrat: ${inv.qtd_estrategica || 0}</div>
+                    <div style="font-size:10px; color:var(--text-muted);">Mat: ${inv.qtd_spot_mat || 0} · Serv: ${inv.qtd_spot_serv || 0} · Estrat: ${inv.qtd_estrategica || 0}</div>
                   </td>
                   <td class="center">${Number(inv.total_solicitacoes).toLocaleString('pt-BR')}</td>
                   <td class="center"><strong style="color:var(--amber);">${Number(inv.backlog_ativo).toLocaleString('pt-BR')}</strong></td>
@@ -1663,7 +1727,7 @@ class PlurixApp {
               <tr>
                 <td>
                   <strong>${c.comprador}</strong>
-                  <div style="font-size:10px; color:var(--text-muted);">Spot: ${c.qtd_spot || 0} · Estrat: ${c.qtd_estrategica || 0}</div>
+                  <div style="font-size:10px; color:var(--text-muted);">Mat: ${c.qtd_spot_mat || 0} · Serv: ${c.qtd_spot_serv || 0} · Estrat: ${c.qtd_estrategica || 0}</div>
                 </td>
                 <td class="center">${Number(c.total_solicitacoes).toLocaleString('pt-BR')}</td>
                 <td class="center"><strong style="color:var(--amber);">${c.backlog_ativo}</strong></td>
@@ -1810,13 +1874,11 @@ class PlurixApp {
               </div>
             </div>
 
-            <div class="dossier-kpi-card ${r.taxa_conformidade_pct >= 85 ? 'emerald' : 'amber'}">
+            <div class="dossier-kpi-card emerald">
               <div class="dossier-kpi-title">Taxa de Conformidade</div>
-              <div class="dossier-kpi-number" style="color:${r.taxa_conformidade_pct >= 85 ? 'var(--emerald)' : 'var(--amber)'};">${Math.round(r.taxa_conformidade_pct || 100)}%</div>
+              <div class="dossier-kpi-number" style="color:var(--emerald);">${Math.round(r.taxa_conformidade_pct || 100)}%</div>
               <div class="dossier-kpi-sub">
-                <span class="sla-badge ${r.taxa_conformidade_pct >= 85 ? 'fast' : 'slow'}" style="font-size:10px;">
-                  ${r.taxa_conformidade_pct >= 85 ? 'Meta de 85% Atingida' : 'Abaixo da meta'}
-                </span>
+                <span style="color:var(--text-secondary); font-size:11px;"><strong>${Number(r.dentro_sla_count || 0).toLocaleString('pt-BR')}</strong> de <strong>${Number(r.com_sla || 0).toLocaleString('pt-BR')}</strong> no prazo</span>
               </div>
             </div>
           </div>
@@ -1937,11 +1999,14 @@ class PlurixApp {
                       </td>
                     </tr>
                   ` : filtrados.map(ch => {
-                    const isOver = (ch.aging_dias || ch.dias_na_etapa || 0) > (ch.meta_sla_dias || 10);
-                    const isFinished = ch.status_nome === 'Encerrado' || ch.status_nome === 'Pedido Enviado' || ch.status_nome === 'Aguardando Entrega';
+                    const ev = this.getTicketSlaEvaluation(ch);
                     const dtCell = (val, color) => val
                       ? `<span style="font-size:11px; color:${color || 'var(--text-secondary)'}; font-weight:600;">${this.formatDate(val)}</span>`
                       : `<span style="font-size:11px; color:var(--text-dim); opacity:0.45;">—</span>`;
+
+                    const displayDtCotacao = ch.data_cotacao || (ev.isEmCotacao || ev.isPosCotacao ? ch.data_criacao : null);
+                    const displayDtPedido = ch.data_aprovacao_pedido || (ev.isFinished ? ch.data_aprovacao : null);
+
                     return `
                       <tr>
                         <td>
@@ -1949,10 +2014,10 @@ class PlurixApp {
                             ${ch.numero_solicitacao || `#ORG-${ch.id}`}
                           </div>
                         </td>
-                        <td>${dtCell(ch.data_cotacao || ch.data_criacao, 'var(--text-secondary)')}</td>
-                        <td>${dtCell(ch.data_aprovacao_pedido, 'var(--sky)')}</td>
+                        <td>${dtCell(displayDtCotacao, 'var(--text-secondary)')}</td>
+                        <td>${dtCell(displayDtPedido, 'var(--sky)')}</td>
                         <td>
-                          <span class="sla-badge ${isFinished ? 'fast' : (ch.status_nome === 'Cotacao' ? 'warning' : 'regular')}">
+                          <span class="sla-badge ${ev.isFinished ? 'fast' : (ev.isEmCotacao ? 'warning' : 'regular')}">
                             ${ch.status_nome}
                           </span>
                         </td>
@@ -1961,15 +2026,19 @@ class PlurixApp {
                             <span style="font-size:11px; color:var(--emerald); font-weight:700;">
                               ${this.formatDate(ch.data_finalizacao)}
                             </span>
-                          ` : (isFinished ? `
+                          ` : (ev.isFinished ? `
                             <span style="font-size:11px; color:var(--emerald); font-weight:700;">
                               Concluído
                             </span>
+                          ` : (ev.isPreCotacao ? `
+                            <span style="font-size:10.5px; color:var(--text-muted); font-weight:600; background:var(--surface-subtle); padding:2px 6px; border-radius:4px;">
+                              Pré-Cotação
+                            </span>
                           ` : `
-                            <span style="font-size:11px; color:var(--amber); font-weight:700; background:var(--amber-bg); padding:2px 6px; border-radius:4px;">
+                            <span style="font-size:11px; color:var(--amber); font-weight:700; background:rgba(245,158,11,0.12); padding:2px 6px; border-radius:4px;">
                               Em aberto
                             </span>
-                          `)}
+                          `))}
                         </td>
                         <td>
                           <div style="font-size:12px; font-weight:700; color:var(--text-primary);">${ch.investida_nome}</div>
@@ -1982,19 +2051,8 @@ class PlurixApp {
                             ${ch.modalidade_compra || 'Spot'}
                           </span>
                         </td>
-                        <td>
-                          <span class="sla-badge ${isFinished ? 'fast' : (ch.status_nome === 'Cotacao' ? 'warning' : 'regular')}" style="font-size:11px;">
-                            ${ch.status_nome}
-                          </span>
-                        </td>
                         <td class="center">
-                          <strong style="color:${isFinished ? (isOver ? 'var(--coral)' : 'var(--emerald)') : (isOver ? 'var(--coral)' : 'var(--amber)')}; font-size:12.5px;">
-                            ${Math.round(ch.aging_dias || ch.dias_na_etapa || 0)}d
-                          </strong>
-                          <span style="font-size:10px; color:var(--text-muted);">/ ${ch.meta_sla_dias || 10}d</span>
-                          <div style="font-size:9.5px; color:${isFinished ? 'var(--emerald)' : (isOver ? 'var(--coral)' : 'var(--text-muted)')}; font-weight:700;">
-                            ${isFinished ? 'Atendido' : (isOver ? `+${Math.round((ch.aging_dias || ch.dias_na_etapa || 0) - (ch.meta_sla_dias || 10))}d atrasado` : 'No prazo')}
-                          </div>
+                          ${ev.badgeHtml}
                         </td>
                       </tr>
                     `;
@@ -2232,57 +2290,62 @@ class PlurixApp {
       }
 
       container.innerHTML = `
-        <!-- 1. OS 4 CARDS DO RADAR DE URGÊNCIA -->
+        <!-- 1. OS 4 CARDS DO RADAR DE URGÊNCIA (INTERATIVOS) -->
         <div class="radar-counters-grid">
           <div class="radar-counter-card danger ${this.state.alertasUrgencia === 'vencido' ? 'active' : ''}" data-urgency="vencido">
-            <div class="radar-counter-icon"><i data-lucide="alert-octagon"></i></div>
+            <div class="radar-counter-icon"><i data-lucide="alert-triangle"></i></div>
             <div>
-              <div class="radar-counter-val">${Number(t.vencidos || 0).toLocaleString('pt-BR')}</div>
-              <div class="radar-counter-label">🔴 Já Estourados (Vencidos)</div>
+              <div class="radar-counter-val" style="color:var(--coral);">${Number(t.vencidos || 0).toLocaleString('pt-BR')}</div>
+              <div class="radar-counter-label">Já Estourados (Vencidos)</div>
             </div>
           </div>
 
           <div class="radar-counter-card warning-high ${this.state.alertasUrgencia === 'critico_24h' ? 'active' : ''}" data-urgency="critico_24h">
             <div class="radar-counter-icon"><i data-lucide="flame"></i></div>
             <div>
-              <div class="radar-counter-val">${Number(t.critico24h || 0).toLocaleString('pt-BR')}</div>
-              <div class="radar-counter-label">🟠 Crítico (Vence em < 24h)</div>
+              <div class="radar-counter-val" style="color:#F97316;">${Number(t.critico24h || 0).toLocaleString('pt-BR')}</div>
+              <div class="radar-counter-label">Crítico (Vence em < 24h)</div>
             </div>
           </div>
 
           <div class="radar-counter-card warning-mid ${this.state.alertasUrgencia === 'alerta_72h' ? 'active' : ''}" data-urgency="alerta_72h">
             <div class="radar-counter-icon"><i data-lucide="clock"></i></div>
             <div>
-              <div class="radar-counter-val">${Number(t.alerta72h || 0).toLocaleString('pt-BR')}</div>
-              <div class="radar-counter-label">🟡 Alerta (Vence em 24h-72h)</div>
+              <div class="radar-counter-val" style="color:var(--amber);">${Number(t.alerta72h || 0).toLocaleString('pt-BR')}</div>
+              <div class="radar-counter-label">Atenção (Vence em 24h-72h)</div>
             </div>
           </div>
 
           <div class="radar-counter-card success ${this.state.alertasUrgencia === 'no_prazo' ? 'active' : ''}" data-urgency="no_prazo">
             <div class="radar-counter-icon"><i data-lucide="check-circle-2"></i></div>
             <div>
-              <div class="radar-counter-val">${Number(t.noPrazo || 0).toLocaleString('pt-BR')}</div>
-              <div class="radar-counter-label">🟢 No Prazo Confortável</div>
+              <div class="radar-counter-val" style="color:var(--emerald);">${Number(t.noPrazo || 0).toLocaleString('pt-BR')}</div>
+              <div class="radar-counter-label">No Prazo Confortável</div>
             </div>
           </div>
         </div>
 
         <!-- 2. MINI-GRIDS DE CONCENTRAÇÃO DE RISCO -->
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:16px; margin-bottom:20px;">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(340px, 1fr)); gap:16px; margin-bottom:20px;">
           <!-- Top Compradores com Itens em Risco -->
-          <div class="card">
-            <div class="card-title" style="font-size:13.5px; margin-bottom:4px;">👤 Concentração de Risco por Comprador</div>
-            <div class="card-subtitle" style="margin-bottom:12px;">Compradores com maior volume de solicitações vencidas ou próximas de estourar</div>
-            <div style="display:flex; flex-direction:column; gap:8px;">
-              ${topBuyers.length === 0 ? '<div style="color:var(--text-muted); font-size:12px;">Nenhum comprador em risco no momento.</div>' : topBuyers.map(b => `
-                <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface-subtle); padding:8px 12px; border-radius:6px; cursor:pointer;" class="btn-risk-buyer" data-buyer="${b.comprador}">
-                  <div style="display:flex; align-items:center; gap:8px;">
-                    <div class="buyer-avatar" style="width:24px; height:24px; font-size:10px;">${this.getInitials(b.comprador)}</div>
-                    <strong style="font-size:12px; color:var(--text-primary);">${b.comprador}</strong>
+          <div class="card" style="padding:16px 18px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <div>
+                <div class="card-title" style="font-size:13.5px;">👤 Risco por Comprador</div>
+                <div class="card-subtitle">Negociadores com demandas vencidas ou em risco iminente</div>
+              </div>
+              <span style="font-size:11px; color:var(--text-muted);">${topBuyers.length} compradores</span>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              ${topBuyers.length === 0 ? '<div style="color:var(--text-muted); font-size:12px; padding:12px 0;">Nenhum comprador com solicitações em risco.</div>' : topBuyers.map(b => `
+                <div class="radar-ranking-item btn-risk-buyer" data-buyer="${b.comprador}" style="cursor:pointer;" title="Clique para filtrar por ${b.comprador}">
+                  <div style="display:flex; align-items:center; gap:10px;">
+                    <div class="buyer-avatar" style="width:26px; height:26px; font-size:10px; border-radius:6px;">${this.getInitials(b.comprador)}</div>
+                    <span style="font-size:12px; font-weight:700; color:var(--text-primary);">${b.comprador}</span>
                   </div>
                   <div style="display:flex; align-items:center; gap:6px;">
-                    <span class="pulse-badge vencido" style="font-size:10px;">${b.vencidos} vencidos</span>
-                    <span class="pulse-badge critico_24h" style="font-size:10px;">${b.criticos} críticos</span>
+                    ${b.vencidos > 0 ? `<span class="pulse-badge vencido" style="font-size:10.5px;">${b.vencidos} vencidos</span>` : ''}
+                    ${b.criticos > 0 ? `<span class="pulse-badge critico_24h" style="font-size:10.5px;">${b.criticos} críticos</span>` : ''}
                   </div>
                 </div>
               `).join('')}
@@ -2290,98 +2353,110 @@ class PlurixApp {
           </div>
 
           <!-- Top Investidas com Itens em Risco -->
-          <div class="card">
-            <div class="card-title" style="font-size:13.5px; margin-bottom:4px;">🏢 Concentração de Risco por Rede Investida</div>
-            <div class="card-subtitle" style="margin-bottom:12px;">Redes com maior volume de chamados aguardando atendimento crítico</div>
+          <div class="card" style="padding:16px 18px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <div>
+                <div class="card-title" style="font-size:13.5px;">🏢 Risco por Rede Investida</div>
+                <div class="card-subtitle">Volume de solicitações em cotação aguardando atendimento</div>
+              </div>
+              <span style="font-size:11px; color:var(--text-muted);">${topStores.length} redes</span>
+            </div>
             <div style="display:flex; flex-direction:column; gap:8px;">
-              ${topStores.length === 0 ? '<div style="color:var(--text-muted); font-size:12px;">Nenhuma rede com gargalo crítico no momento.</div>' : topStores.map(s => `
-                <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface-subtle); padding:8px 12px; border-radius:6px;">
-                  <strong style="font-size:12px; color:var(--text-primary);">${s.investida}</strong>
-                  <span class="pulse-badge vencido" style="font-size:10px;">${s.totalRisco} chamados em risco</span>
-                </div>
-              `).join('')}
+              ${topStores.length === 0 ? '<div style="color:var(--text-muted); font-size:12px; padding:12px 0;">Nenhuma rede com gargalo crítico.</div>' : topStores.map(s => {
+                const maxRisco = Math.max(...topStores.map(x => x.totalRisco || 1), 1);
+                const pctBar = Math.round(((s.totalRisco || 0) / maxRisco) * 100);
+                return `
+                  <div style="background:var(--surface-subtle); padding:8px 12px; border-radius:6px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                      <strong style="font-size:12px; color:var(--text-primary);">${s.investida}</strong>
+                      <span class="pulse-badge vencido" style="font-size:10px; padding:1px 6px;">${s.totalRisco} chamados</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.06); height:4px; border-radius:2px; overflow:hidden;">
+                      <div style="width:${pctBar}%; background:var(--coral); height:100%;"></div>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
             </div>
           </div>
         </div>
 
         <!-- 3. TABELA DETALHADA COM CONTAGEM REGRESSIVA DE SLA -->
-        <div class="card">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
+        <div class="table-panel">
+          <div class="table-toolbar">
             <div>
-              <div class="card-title">📋 Radar Ativo de Chamados (${chamados.length})</div>
-              <div class="card-subtitle">Solicitações em aberto ordenadas pela urgência de atendimento</div>
+              <div style="font-size:13.5px; font-weight:800; color:var(--text-primary);">Radar de Chamados em Cotação (${chamados.length})</div>
+              <div style="font-size:11px; color:var(--text-muted);">Solicitações ativas ordenadas pela urgência de atendimento</div>
             </div>
 
-            <!-- Filtros de Urgência Rápidos e Busca -->
+            <!-- Filtros Rápidos de Urgência e Busca -->
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-              <div class="filter-tag-group">
+              <div style="display:flex; gap:3px;">
                 <button class="btn-filter-tag ${this.state.alertasUrgencia === 'todos' ? 'active' : ''}" data-urgfilter="todos">Todos (${t.totalAtivos || 0})</button>
-                <button class="btn-filter-tag ${this.state.alertasUrgencia === 'vencido' ? 'active' : ''}" data-urgfilter="vencido" style="color:var(--coral);">🔴 Vencidos (${t.vencidos || 0})</button>
-                <button class="btn-filter-tag ${this.state.alertasUrgencia === 'critico_24h' ? 'active' : ''}" data-urgfilter="critico_24h" style="color:#F97316;">🟠 < 24h (${t.critico24h || 0})</button>
-                <button class="btn-filter-tag ${this.state.alertasUrgencia === 'alerta_72h' ? 'active' : ''}" data-urgfilter="alerta_72h" style="color:var(--amber);">🟡 24h-72h (${t.alerta72h || 0})</button>
+                <button class="btn-filter-tag ${this.state.alertasUrgencia === 'vencido' ? 'active' : ''}" data-urgfilter="vencido" style="color:var(--coral);">Vencidos (${t.vencidos || 0})</button>
+                <button class="btn-filter-tag ${this.state.alertasUrgencia === 'critico_24h' ? 'active' : ''}" data-urgfilter="critico_24h" style="color:#F97316;">< 24h (${t.critico24h || 0})</button>
+                <button class="btn-filter-tag ${this.state.alertasUrgencia === 'alerta_72h' ? 'active' : ''}" data-urgfilter="alerta_72h" style="color:var(--amber);">24h-72h (${t.alerta72h || 0})</button>
               </div>
 
-              <div class="search-box-wrap" style="width:200px;">
-                <i data-lucide="search" style="width:14px; height:14px;"></i>
-                <input type="text" id="alertasSearchInput" placeholder="Buscar no radar..." value="${this.state.alertasSearch || ''}" style="padding:6px 8px 6px 28px; font-size:12px;">
+              <div class="search-input-clean" style="width:210px;">
+                <i data-lucide="search" style="width:13px; height:13px; color:var(--text-muted);"></i>
+                <input type="text" id="alertasSearchInput" placeholder="Buscar no radar..." value="${this.state.alertasSearch || ''}">
               </div>
             </div>
           </div>
 
-          <div class="table-container">
+          <div style="max-height: 520px; overflow-y: auto;">
             <table class="data-table">
               <thead>
                 <tr>
                   <th>Solicitação</th>
-                  <th>Criação</th>
-                  <th>Modalidade & Meta</th>
-                  <th style="text-align:center;">Aging Atual</th>
-                  <th>Status de Urgência (Contagem Regressiva)</th>
-                  <th>Investida</th>
-                  <th>Comprador Responsável</th>
-                  <th>Etapa Atual</th>
+                  <th>Início Cotação</th>
+                  <th>Rede & Categoria</th>
+                  <th>Comprador</th>
+                  <th>Modalidade</th>
+                  <th style="text-align:center;">Aging / Meta</th>
+                  <th>Urgência SLA</th>
                 </tr>
               </thead>
               <tbody>
                 ${chamados.length === 0 ? `
                   <tr>
-                    <td colspan="8" style="text-align:center; padding:30px; color:var(--text-muted);">
+                    <td colspan="7" style="text-align:center; padding:32px; color:var(--text-muted);">
                       Nenhum chamado encontrado para o filtro selecionado.
                     </td>
                   </tr>
-                ` : chamados.map(c => `
-                  <tr class="clickable-solic-row" data-solic-id="${c.id}" title="Clique para abrir a Linha do Tempo e Rastreabilidade desta solicitação">
-                    <td>
-                      <div style="display:flex; align-items:center; gap:6px;">
+                ` : chamados.map(c => {
+                  const isVencido = c.dias_restantes < 0;
+                  return `
+                    <tr class="clickable-solic-row" data-solic-id="${c.id}" style="cursor:pointer;" title="Clique para abrir a Linha do Tempo da solicitação">
+                      <td>
                         <strong style="color:var(--plx-accent); font-size:12px;">${c.numero_solicitacao || `#ORG-${c.id}`}</strong>
-                        <i data-lucide="git-commit" style="width:12px; height:12px; color:var(--text-muted); opacity:0.6;"></i>
-                      </div>
-                    </td>
-                    <td>
-                      <span style="font-size:11px; color:var(--text-secondary); font-weight:600;">${this.formatDate(c.data_criacao)}</span>
-                    </td>
-                    <td>
-                      <span class="tag-pill" style="font-size:10.5px;">${c.modalidade_compra} (${c.meta_sla_dias}d)</span>
-                    </td>
-                    <td class="center">
-                      <strong style="font-size:12px; color:${c.dias_restantes < 0 ? 'var(--coral)' : 'var(--text-primary)'};">${Math.round(c.aging_dias)}d</strong>
-                    </td>
-                    <td>
-                      <span class="pulse-badge ${c.nivel_urgencia}">
-                        ${c.label_urgencia}
-                      </span>
-                    </td>
-                    <td>
-                      <div style="font-size:11.5px; font-weight:700; color:var(--text-primary);">${c.investida_nome}</div>
-                    </td>
-                    <td>
-                      <div style="font-size:11.5px; color:var(--text-primary);">${c.comprador || '<span style="color:var(--text-dim);">Não Atribuído</span>'}</div>
-                    </td>
-                    <td>
-                      <span class="sla-badge regular" style="font-size:10.5px;">${c.status_nome}</span>
-                    </td>
-                  </tr>
-                `).join('')}
+                      </td>
+                      <td>
+                        <span style="font-size:11px; color:var(--text-secondary); font-weight:600;">${this.formatDate(c.data_cotacao || c.data_criacao)}</span>
+                      </td>
+                      <td>
+                        <div style="font-weight:700; color:var(--text-primary); font-size:12px;">${c.investida_nome}</div>
+                        <div style="font-size:10px; color:var(--text-muted);">${c.categoria}</div>
+                      </td>
+                      <td>
+                        <div style="font-size:12px; color:var(--text-primary); font-weight:600;">${c.comprador || '<span style="color:var(--text-dim);">Não Atribuído</span>'}</div>
+                      </td>
+                      <td>
+                        <span class="tag-pill" style="font-size:10px; padding:2px 6px;">${c.modalidade_compra}</span>
+                      </td>
+                      <td class="center">
+                        <strong style="font-size:12.5px; color:${isVencido ? 'var(--coral)' : 'var(--emerald)'};">${Math.round(c.aging_dias)}d</strong>
+                        <span style="font-size:10px; color:var(--text-muted);">/ ${c.meta_sla_dias}d</span>
+                      </td>
+                      <td>
+                        <span class="pulse-badge ${c.nivel_urgencia}">
+                          ${c.label_urgencia}
+                        </span>
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
               </tbody>
             </table>
           </div>

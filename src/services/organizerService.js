@@ -271,6 +271,15 @@ class OrganizerService {
       if (!val || val === '--' || val === '0000-00-00 00:00:00' || val === 'null' || val === 'undefined') return null;
       const str = String(val).trim();
       if (!str || str === '--') return null;
+      // Converter formato brasileiro DD/MM/YYYY HH:MM:SS para ISO YYYY-MM-DD HH:MM:SS
+      const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}:\d{1,2}(?::\d{1,2})?))?/);
+      if (m) {
+        const day = m[1].padStart(2, '0');
+        const month = m[2].padStart(2, '0');
+        const year = m[3];
+        const time = m[4] || '00:00:00';
+        return `${year}-${month}-${day} ${time}`;
+      }
       return str;
     }
 
@@ -278,29 +287,32 @@ class OrganizerService {
     try {
       for (const item of dados) {
         const idInterno = item.id || item.ID || item.id_solicitacao || null;
-        const numSolic = item.numero_solicitacao || item.ordem_compra || (idInterno ? String(idInterno) : null);
-        const rawStatus = (item.status_nome || item.status || 'Solicitação').trim();
-        const rawComprador = item.comprador || item.analista || null;
-        const rawInvestida = (item.investida_nome || item.investida || 'Não Informada').trim();
-        const rawUnidade = item.unidade_nome || item.unidade || null;
-        const rawDepto = item.departamento || null;
-        const rawCategoria = (item.categoria || 'Geral').trim();
-        const rawTipo = (item.tipo_compra || item.tipo || 'SPOT').toUpperCase().trim();
+        const numSolic = item.numero_solicitacao || item.ordem_compra || item['Ordem de Compra'] || item['Solicitação'] || (idInterno ? String(idInterno) : null);
+        const rawStatus = (item.status_nome || item.status || item['Status'] || 'Solicitação').trim();
+        const rawComprador = item.comprador || item.analista || item['Comprador'] || item['Analista'] || null;
+        const rawInvestida = (item.investida_nome || item.investida || item['Investida'] || 'Não Informada').trim();
+        const rawUnidade = item.unidade_nome || item.unidade || item['Unidade'] || null;
+        const rawDepto = item.departamento || item['Departamento'] || null;
+        const rawCategoria = (item.categoria || item['Categoria'] || 'Geral').trim();
+        const rawTipo = (item.tipo_compra || item.tipo || item['Tipo de Compra'] || 'SPOT').toUpperCase().trim();
         
         // Datas de todas as etapas (mantém null se não existir/não preenchido)
-        const dtCriacao = cleanDate(item.data_criacao || item.criado || item.data_abertura);
-        const dtAprovacao = cleanDate(item.data_aprovacao || item.aprovado || item.data_aprovacao_solicitacao);
-        const dtCotacao = cleanDate(item.data_cotacao || item.cotado_em || item.data_inicio_cotacao || item.data_envio_cotacao);
-        const dtAprovacaoPedido = cleanDate(item.data_aprovacao_pedido || item.aprovacao_pedido || item.data_aprovacao_oc);
-        const dtFinalizacao = cleanDate(item.data_finalizacao || item.encerrado || item.data_conclusao || item.data_pedido_enviado);
-        const dtEntregaPrevista = cleanDate(item.data_entrega_prevista || item.previsao_entrega || item.data_previsao);
+        const dtCriacao = cleanDate(item.data_criacao || item.criado || item.data_abertura || item.dt_criacao || item.criacao || item['Data Criação'] || item['Criado em']);
+        const dtAprovacao = cleanDate(item.data_aprovacao || item.aprovado || item.data_aprovacao_solicitacao || item.dt_aprovacao || item['Data Aprovação'] || item['Aprovado']);
+        const dtCotacao = cleanDate(
+          item['Início Cotação'] || item['Inicio Cotação'] || item['Inicio Cotacao'] || item['inicio_cotacao'] ||
+          item.data_cotacao || item.cotado_em || item.data_inicio_cotacao || item.data_envio_cotacao || item.dt_cotacao || item.inicio_cotacao || item.cotacao || item['Data Cotação']
+        );
+        const dtAprovacaoPedido = cleanDate(item.data_aprovacao_pedido || item.aprovacao_pedido || item.data_aprovacao_oc || item.dt_aprovacao_pedido || item.data_pedido || item.pedido_gerado || item['Gerar/Envio Pedido'] || item['Aprovação OC']);
+        const dtFinalizacao = cleanDate(item.data_finalizacao || item.encerrado || item.data_conclusao || item.data_pedido_enviado || item.dt_finalizacao || item.data_fechamento || item['Data Conclusão'] || item['Finalizado']);
+        const dtEntregaPrevista = cleanDate(item.data_entrega_prevista || item.previsao_entrega || item.data_previsao || item.dt_entrega || item['Previsão Entrega']);
 
-        const rawFornecedor = item.fornecedor_vencedor || item.fornecedor || null;
-        const rawSla = item.dias_atendimento_sla ?? item.sla_cotacao_dias ?? null;
-        const vCotado = item.valor_menor_cotado ?? null;
-        const vFechado = item.valor_final_negociado ?? null;
-        const sValor = item.saving_valor ?? 0;
-        const sPct = item.saving_percentual ?? 0;
+        const rawFornecedor = item.fornecedor_vencedor || item.fornecedor || item['Fornecedor'] || null;
+        const rawSla = item.dias_atendimento_sla ?? item.sla_cotacao_dias ?? item['SLA Cotação (dias)'] ?? item['SLA Cotação'] ?? item['SLA Cotacao (dias)'] ?? item['SLA Cotacao'] ?? null;
+        const vCotado = item.valor_menor_cotado ?? item['Valor Menor Cotado'] ?? item['Valor Orçamento'] ?? null;
+        const vFechado = item.valor_final_negociado ?? item['Valor Fechado'] ?? item['Valor'] ?? null;
+        const sValor = item.saving_valor ?? item['Saving Operacional'] ?? 0;
+        const sPct = item.saving_percentual ?? item['% Saving'] ?? 0;
 
         // Competência temporal
         let anoComp = 2026;
@@ -341,15 +353,6 @@ class OrganizerService {
           tipoNorm = 'SPOT_SERVICOS';
         } else {
           tipoNorm = 'SPOT_MATERIAIS';
-        }
-
-        // SLA de Cotação
-        let diasSla = null;
-        if (rawSla !== null && rawSla !== undefined && rawSla !== '--') {
-          const parsed = typeof rawSla === 'number' ? rawSla : parseFloat(String(rawSla).replace(',', '.'));
-          if (!isNaN(parsed) && parsed >= 0) {
-            diasSla = parsed;
-          }
         }
 
         // Meta SLA por tipo (Metas Oficiais Plurix)

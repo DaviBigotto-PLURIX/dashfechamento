@@ -88,4 +88,25 @@ router.post('/audit-csv', upload.single('file'), async (req, res) => {
   }
 });
 
+// 4. Ingestão de Planilha/CSV de Cotações do Organizer
+const spreadsheetService = require('../services/spreadsheetService');
+router.post('/upload-planilha', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado.' });
+    const result = await spreadsheetService.processOrganizerSpreadsheet(
+      req.file.buffer,
+      req.file.originalname,
+      req.body.usuario || 'Analista'
+    );
+    res.json({
+      sucesso: true,
+      mensagem: `Planilha do Organizer processada com sucesso! ${result.totalValidos} solicitações e datas de cotação atualizadas.`,
+      resultado: result
+    });
+  } catch (err) {
+    console.error('[OrganizerRoutes] Erro ao processar planilha do Organizer:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

@@ -349,6 +349,48 @@ class SpreadsheetService {
       totalEstoque
     };
   }
+
+  /**
+   * Ingestão de Planilha/CSV exportado do Organizer (Relatório Geral / Cotações)
+   */
+  async processOrganizerSpreadsheet(buffer, fileName, usuario = 'Analista') {
+    const db = getDatabase();
+    const wb = XLSX.read(buffer, { type: 'buffer', raw: true });
+    const sheetName = wb.SheetNames[0];
+    const ws = wb.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(ws, { defval: null });
+
+    const insertCarga = db.prepare(`
+      INSERT INTO historico_carga (tipo_carga, origem_arquivo, data_inicio, executado_por, status_carga)
+      VALUES ('API_ORGANIZER', ?, CURRENT_TIMESTAMP, ?, 'PROCESSANDO')
+    `);
+    const cargaRes = insertCarga.run(fileName, usuario);
+    const cargaId = Number(cargaRes.lastInsertRowid);
+
+    db.prepare('DELETE FROM conciliacao').run();
+    db.prepare('DELETE FROM solicitacao_organizer').run();
+
+    const organizerService = require('./organizerService');
+    const res = organizerService.persistPageRecords(rows, cargaId);
+
+    db.prepare(`
+      UPDATE historico_carga
+      SET data_fim = CURRENT_TIMESTAMP,
+          total_registros_recebidos = ?,
+          total_registros_validos = ?,
+          total_registros_rejeitados = ?,
+          status_carga = 'SUCESSO'
+      WHERE id = ?
+    `).run(res.recebidos, res.validos, res.rejeitados, cargaId);
+
+    return {
+      sucesso: true,
+      cargaId,
+      totalRecebidos: res.recebidos,
+      totalValidos: res.validos,
+      totalRejeitados: res.rejeitados
+    };
+  }
 }
 
 module.exports = new SpreadsheetService();
