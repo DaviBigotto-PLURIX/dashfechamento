@@ -17,9 +17,11 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
-
 <div class="app-layout" id="appLayout">
   
+  <!-- Backdrop para Drawer Mobile -->
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
   <!-- =====================================================================
        BARRA LATERAL / MENU EXECUTIVO RETRÁTIL (SIDEBAR)
        ===================================================================== -->
@@ -104,9 +106,14 @@
     
     <!-- Topbar Simplificada e Clean -->
     <header class="main-topbar">
-      <div>
-        <h1 class="main-page-title" id="pageMainTitle">Visão Geral da Operação</h1>
-        <div class="main-page-subtitle" id="pageMainSubtitle">Acompanhamento diário de performance, prazos e volumetria</div>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <button class="btn-mobile-menu" id="btnMobileMenu" title="Abrir Menu">
+          <i data-lucide="menu" style="width:20px; height:20px;"></i>
+        </button>
+        <div>
+          <h1 class="main-page-title" id="pageMainTitle">Visão Geral da Operação</h1>
+          <div class="main-page-subtitle" id="pageMainSubtitle">Acompanhamento diário de performance, prazos e volumetria</div>
+        </div>
       </div>
 
       <!-- Seletor de Período Limpo (YTD / Mensal) -->
@@ -140,34 +147,47 @@
         <div id="workflowContent"></div>
       </section>
 
-      <!-- ABA 4: INVESTIDAS -->
+      <!-- ABA 4: INVESTIDAS (REDES) -->
       <section id="investidas" class="section-pane">
         <div id="investidasContent"></div>
       </section>
 
-      <!-- ABA 5: CATEGORIAS -->
+      <!-- ABA 5: CATEGORIAS DE COMPRAS -->
       <section id="categorias" class="section-pane">
         <div id="categoriasContent"></div>
       </section>
 
-      <!-- ABA 6: RAIO-X COMPLETO DO COMPRADOR (FULL-PAGE DOSSIER) -->
-      <section id="buyerDetailPane" class="section-pane">
-        <div id="buyerDetailContent"></div>
-      </section>
-
-      <!-- ABA 7: RAIO-X COMPLETO DA CATEGORIA (FULL-PAGE DOSSIER) -->
-      <section id="categoryDetailPane" class="section-pane">
-        <div id="categoryDetailContent"></div>
-      </section>
-
-      <!-- ABA 8: ALERTAS DE SLA / PRÓXIMOS AO VENCIMENTO -->
+      <!-- ABA 6: ALERTAS SLA (RADAR DE URGÊNCIA) -->
       <section id="alertasSla" class="section-pane">
         <div id="alertasSlaContent"></div>
       </section>
 
     </div>
-  </main>
 
+    <!-- Navegação Inferior para Mobile (Bottom Navigation Bar) -->
+    <nav class="mobile-bottom-nav" id="mobileBottomNav">
+      <button class="mobile-nav-btn tab-link active" data-tab="cockpit">
+        <i data-lucide="home"></i>
+        <span>Resumo</span>
+      </button>
+      <button class="mobile-nav-btn tab-link" data-tab="compradores">
+        <i data-lucide="users"></i>
+        <span>Compradores</span>
+      </button>
+      <button class="mobile-nav-btn tab-link" data-tab="workflow">
+        <i data-lucide="git-branch"></i>
+        <span>Workflow</span>
+      </button>
+      <button class="mobile-nav-btn tab-link" data-tab="investidas">
+        <i data-lucide="building-2"></i>
+        <span>Investidas</span>
+      </button>
+      <button class="mobile-nav-btn tab-link" data-tab="alertasSla">
+        <i data-lucide="bell-ring"></i>
+        <span>Alertas</span>
+      </button>
+    </nav>
+  </main>
 </div>
 
 <!-- =====================================================================
@@ -198,42 +218,42 @@
 </div>
 
 <!-- =====================================================================
-     MODAL: RAIO-X DETALHADO DO COMPRADOR
+     MODAL: DOSSIÊ INDIVIDUAL DO COMPRADOR (RAIO-X 360°)
      ===================================================================== -->
 <div class="modal-backdrop" id="buyerDetailModal">
   <div class="modal-dialog modal-dialog-large">
     <div class="modal-title-bar">
       <div style="display:flex; align-items:center; gap:12px;">
-        <div class="buyer-avatar" id="modalBuyerAvatar">PL</div>
+        <div class="buyer-avatar" id="modalBuyerAvatar" style="width:36px; height:36px; font-size:13px;">-</div>
         <div>
           <h2 id="modalBuyerName" style="margin:0; font-size:16px;">Comprador</h2>
-          <div id="modalBuyerMeta" style="font-size:11.5px; color:var(--text-muted);">Dossiê individual de performance</div>
+          <div id="modalBuyerMeta" style="font-size:11.5px; color:var(--text-muted);">Dossiê Executivo de Performance</div>
         </div>
       </div>
       <button class="btn-close" id="btnCloseBuyerModal"><i data-lucide="x"></i></button>
     </div>
-    <div class="modal-body" id="buyerModalBody" style="max-height: calc(85vh - 100px); overflow-y: auto;">
+    <div class="modal-body" id="buyerModalBody">
       <!-- Injetado dinamicamente via JS -->
     </div>
   </div>
 </div>
 
 <!-- =====================================================================
-     MODAL: RAIO-X DA REDE INVESTIDA
+     MODAL: RAIO-X DA INVESTIDA (LOJA / REDE)
      ===================================================================== -->
 <div class="modal-backdrop" id="investidaDetailModal">
-  <div class="modal-dialog modal-dialog-large">
+  <div class="modal-dialog">
     <div class="modal-title-bar">
       <div style="display:flex; align-items:center; gap:12px;">
-        <div class="buyer-avatar" style="background:var(--plx-primary);"><i data-lucide="building-2" style="width:16px; height:16px;"></i></div>
+        <div class="buyer-avatar" style="background:var(--plx-accent);"><i data-lucide="store" style="width:16px; height:16px;"></i></div>
         <div>
           <h2 id="modalInvestidaName" style="margin:0; font-size:16px;">Rede Investida</h2>
-          <div id="modalInvestidaMeta" style="font-size:11.5px; color:var(--text-muted);">Compradores e volumetria da unidade</div>
+          <div id="modalInvestidaMeta" style="font-size:11.5px; color:var(--text-muted);">Detalhamento de volumetria e SLA</div>
         </div>
       </div>
       <button class="btn-close" id="btnCloseInvestidaModal"><i data-lucide="x"></i></button>
     </div>
-    <div class="modal-body" id="investidaModalBody" style="max-height: calc(85vh - 100px); overflow-y: auto;">
+    <div class="modal-body" id="investidaModalBody">
       <!-- Injetado dinamicamente via JS -->
     </div>
   </div>
@@ -257,6 +277,9 @@
     <div class="modal-body" id="categoryModalBody" style="max-height: calc(85vh - 100px); overflow-y: auto;">
       <!-- Injetado dinamicamente via JS -->
     </div>
+  </div>
+</div>
+
 <!-- =====================================================================
      MODAL: RASTREABILIDADE & LINHA DO TEMPO DA SOLICITAÇÃO (TIMELINE STEPPER)
      ===================================================================== -->

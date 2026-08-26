@@ -81,6 +81,9 @@ class PlurixApp {
   // =====================================================================
   initSidebar() {
     const sidebar = document.getElementById('appSidebar');
+    const backdrop = document.getElementById('sidebarBackdrop');
+    const btnMobile = document.getElementById('btnMobileMenu');
+
     if (sidebar && this.state.sidebarCollapsed) {
       sidebar.classList.add('collapsed');
     }
@@ -95,6 +98,20 @@ class PlurixApp {
 
     const btnToggle = document.getElementById('btnToggleSidebar');
     if (btnToggle) btnToggle.addEventListener('click', toggleSidebar);
+
+    // Controle Mobile Drawer
+    const openMobileMenu = () => {
+      if (sidebar) sidebar.classList.add('mobile-open');
+      if (backdrop) backdrop.classList.add('active');
+    };
+
+    const closeMobileMenu = () => {
+      if (sidebar) sidebar.classList.remove('mobile-open');
+      if (backdrop) backdrop.classList.remove('active');
+    };
+
+    if (btnMobile) btnMobile.addEventListener('click', openMobileMenu);
+    if (backdrop) backdrop.addEventListener('click', closeMobileMenu);
   }
 
   // =====================================================================
@@ -408,9 +425,16 @@ class PlurixApp {
   switchTab(tabId) {
     this.state.activeTab = tabId;
     
-    // Atualiza links da sidebar
+    // Atualiza links da sidebar e bottom nav
     document.querySelectorAll('.sidebar-nav .tab-link').forEach(t => t.classList.toggle('active', t.dataset.tab === tabId));
+    document.querySelectorAll('.mobile-bottom-nav .tab-link').forEach(t => t.classList.toggle('active', t.dataset.tab === tabId));
     document.querySelectorAll('.section-pane').forEach(p => p.classList.toggle('active', p.id === tabId));
+
+    // Fecha drawer no mobile ao navegar
+    const sidebar = document.getElementById('appSidebar');
+    const backdrop = document.getElementById('sidebarBackdrop');
+    if (sidebar) sidebar.classList.remove('mobile-open');
+    if (backdrop) backdrop.classList.remove('active');
 
     this.updateHeader();
     this.renderCurrentTab();
