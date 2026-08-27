@@ -29,6 +29,9 @@
 | **KPI-11** | **Prazo Total Médio de Atendimento**| Tempo total decorrido entre a criação da solicitação e a emissão do pedido de compra. | $\frac{\sum (\text{Data Pedido} - \text{Data Criacao})}{\text{Total de Pedidos Gerados}}$ | API Organizer / CSV | Status com pedido gerado |
 | **KPI-12** | **Taxa de Emergenciais** | Percentual de compras realizadas fora do fluxo regular planejado. | $(\frac{\text{Qtd Requisições Emergenciais}}{\text{Total de Requisições}}) \times 100$ | API Organizer / CSV | `Tipo de Compra == 'EMERGENCIAL'` |
 | **KPI-13** | **Cobertura de Estoque Indireto**| Volume financeiro de materiais de consumo estocados distribuído por faixas de aging. | $\sum \text{Valor em Estoque por Bucket de Dias}$ | Planilha de Estocáveis / ERP | Faixas: 0-30d, 31-60d, 61-90d, 91-120d, 121-180d, >180d |
+| **KPI-14** | **Em Aberto Dentro do SLA** | Quantidade e percentual de requisições ativas cuja cotação ainda está dentro do prazo oficial da modalidade. | $\sum (\text{Backlog Ativo onde Dias Corridos} \le \text{Meta SLA})$ | API Organizer | Spot Mat $\le$ 10d, Spot Serv $\le$ 15d, Estrat $\le$ 45d |
+| **KPI-15** | **Em Aberto Fora do SLA** | Quantidade e percentual de requisições ativas cuja cotação já ultrapassou o prazo limite da modalidade. | $\sum (\text{Backlog Ativo onde Dias Corridos} > \text{Meta SLA})$ | API Organizer | Spot Mat > 10d, Spot Serv > 15d, Estrat > 45d |
+| **KPI-16** | **Segmentação Comprador (Loja / Tipo)**| Capacidade de cruzar o desempenho do comprador filtrando por rede atendida e modalidade de compra. | Dinâmico por `investida_nome` e `tipo_compra` | API Organizer | Aplicável na Visão Equipe e Dossiê Individual |
 
 ---
 
@@ -40,7 +43,6 @@
 | **2. Saving CAPEX x OPEX** | Donut Modalidade, Ranking Investidas, Termômetro de Metas por Investida | Planilha Fechamento + Metas por Rede | **HOMOLOGADO** | Cálculos determinísticos a partir dos lançamentos validados. |
 | **3. Evolução Mensal** | Curva Meta x Realizado, Tabela Mês a Mês | Planilha Fechamento + Tabela de Metas | **HOMOLOGADO** | Exibe apenas meses com status fechado/aprovado. |
 | **4. Principais Negociações** | Top 3 por Investida, Tabela Dinâmica com Busca e Filtros | Planilha Fechamento | **HOMOLOGADO** | Tabela dinâmica paginada com filtro por tipo de ganho. |
-| **5. Requisições & SLA** | Total Requisições, SLA Cotação, Prazo Médio, Conformidade | API Organizer (Consolidada) | **INTEGRAÇÃO API** | Consome dados operacionais da sincronização da API. |
-| **6. SLA por Área** | Tempo Médio por Investida e Departamento | API Organizer (Agrupamento) | **AUDITADO (Requer Cálculo Dinâmico)** | Substituir mock fixo por agrupamento real `AVG(dias) GROUP BY investida, departamento`. |
-| **7. Emergenciais** | Total Gasto Emergencial, Ticket Médio, Concentração por Loja | API Organizer (`tipo == 'EMERGENCIAL'`) | **AUDITADO (Requer Cálculo Dinâmico)** | Substituir mock fixo por cálculo real sobre requisições com flag emergencial. |
-| **8. Estoque Indireto** | Mapeamento por Unidade, Distribuição por Aging de Cobertura | Planilhas de Fechamento de Estocáveis | **FONTE DEDICADA** | Exibir apenas se a carga da planilha de estocáveis do mês tiver sido importada; caso contrário, exibir empty state claro. |
+| **5. Gestão de Compradores** | Volume, Backlog, Aberto no SLA, Fora SLA, SLA Médio, Filtros Loja/Tipo | API Organizer (Consolidada) | **HOMOLOGADO** | Suporta segmentação por Investida e Tipo de Compra no Cockpit e no Raio-X. |
+| **6. Workflow Operacional** | Funil de Etapas, Aging do Backlog, Gargalos Críticos | API Organizer (Consolidada) | **HOMOLOGADO** | Regra de encerramento por Pedido de Compra (PC) e exclusão de "Aguardando Entrega". |
+| **7. Ranking Oficial SLA** | Pódio Top 3, Classificação com Medalhas, Mix de Modalidades | API Organizer (Consolidada) | **HOMOLOGADO** | Classificação determinística por % no Prazo e tempo de atendimento. |

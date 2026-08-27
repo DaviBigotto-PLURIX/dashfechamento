@@ -61,12 +61,22 @@ class OperationalService {
     const db = getDatabase();
     const { clause, params, periodName } = this.buildPeriodFilter(mode, month, year);
 
-    // 1.1 KPIs Centrais — Usa SLA nativo do Organizer
+    // 1.1 KPIs Centrais — Usa regra determinística de Pedido de Compra Emitido
     const kpiQuery = `
       SELECT 
         COUNT(*) as total_solicitacoes,
-        SUM(CASE WHEN LOWER(status_nome) LIKE '%cota%' OR LOWER(status_nome) LIKE '%solicita%' OR LOWER(status_nome) LIKE '%triagem%' THEN 1 ELSE 0 END) as backlog_ativo,
-        SUM(CASE WHEN status_nome IN ('Encerrado', 'Pedido Enviado', 'Aguardando Entrega', 'Validacao', 'Validação', 'Validacao Tecnica', 'Validação Técnica', 'Aprovacao', 'Aprovação', 'Aprovacao OC') OR LOWER(status_nome) LIKE '%valid%' OR LOWER(status_nome) LIKE '%aprov%' OR LOWER(status_nome) LIKE '%entrega%' THEN 1 ELSE 0 END) as total_concluidas,
+        SUM(CASE 
+          WHEN (numero_solicitacao NOT LIKE 'PC%' OR numero_solicitacao IS NULL)
+           AND status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando entrega', 'Aguardando Entrega')
+           AND LOWER(status_nome) NOT LIKE '%entrega%'
+          THEN 1 ELSE 0 
+        END) as backlog_ativo,
+        SUM(CASE 
+          WHEN numero_solicitacao LIKE 'PC%' 
+            OR status_nome IN ('Encerrado', 'Pedido Enviado', 'Aguardando Entrega', 'Aguardando entrega') 
+            OR data_finalizacao IS NOT NULL 
+          THEN 1 ELSE 0 
+        END) as total_concluidas,
         
         -- SLA Cotação médio (apenas registros COM dado nativo do Organizer)
         ROUND(COALESCE(AVG(CASE WHEN dias_atendimento_sla IS NOT NULL AND dias_atendimento_sla >= 0 THEN dias_atendimento_sla END), 0), 1) as sla_cotacao_medio,
@@ -82,7 +92,9 @@ class OperationalService {
         
         -- Requisições em Aberto críticas: >15 dias na etapa de cotação
         SUM(CASE 
-          WHEN status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando Entrega')
+          WHEN (numero_solicitacao NOT LIKE 'PC%' OR numero_solicitacao IS NULL)
+           AND status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando entrega', 'Aguardando Entrega')
+           AND LOWER(status_nome) NOT LIKE '%entrega%'
            AND data_cotacao IS NOT NULL
            AND (JULIANDAY('now') - JULIANDAY(data_cotacao)) > 15
           THEN 1 ELSE 0 
@@ -121,8 +133,7 @@ class OperationalService {
       { key: 'Aprovação', label: '5. Aprovação (Alçada)', color: '#F59E0B' },
       { key: 'Em Análise Contratual', label: '6. Análise Contratual', color: '#EC4899' },
       { key: 'Pedido Enviado', label: '7. Pedido Enviado', color: '#10B981' },
-      { key: 'Aguardando entrega', label: '8. Aguardando Entrega', color: '#06B6D4' },
-      { key: 'Encerrado', label: '9. Encerrado / Concluído', color: '#64748B' }
+      { key: 'Encerrado', label: '8. Encerrado / Concluído', color: '#64748B' }
     ];
 
     const totalReqs = kpiRow?.total_solicitacoes || 1;
@@ -141,7 +152,7 @@ class OperationalService {
     });
 
     // 1.3 Maior Gargalo
-    const inFlightStages = funnel.filter(f => !['Pedido Enviado', 'Aguardando Entrega', 'Encerrado'].includes(f.chave));
+    const inFlightStages = funnel.filter(f => !['Pedido Enviado', 'Encerrado'].includes(f.chave));
     inFlightStages.sort((a, b) => b.quantidade - a.quantidade);
     const topBottleneck = inFlightStages[0] || { etapa: 'Cotação', quantidade: 0, percentual: 0 };
 
@@ -172,7 +183,7 @@ class OperationalService {
         nivel: 'critico',
         icone: 'alert-triangle',
         titulo: `🔴 Maior Gargalo: ${topBottleneck.etapa}`,
-        descricao: `${topBottleneck.quantidade} chamados represados (${topBottleneck.percentual}% do total).`,
+        descricao: `${topBottleneck.quantidade} requisições represadas (${topBottleneck.percentual}% do total).`,
         acaoRecomendada: topBottleneck.chave === 'Cotação' ? 'Priorizar retorno de fornecedores e redistribuir cotações.' : 'Cobrar aprovações pendentes de gerentes de loja.'
       },
       {
@@ -180,7 +191,7 @@ class OperationalService {
         nivel: 'alerta',
         icone: 'user-x',
         titulo: `🟡 Comprador com Maior Carga: ${buyerSobrecarga?.comprador ? buyerSobrecarga.comprador.split(' ')[0] : 'N/A'}`,
-        descricao: `${buyerSobrecarga?.backlog || 0} chamados ativos (SLA atual: ${buyerSobrecarga?.sla || 0}d).`,
+        descricao: `${buyerSobrecarga?.backlog || 0} requisições ativas (SLA atual: ${buyerSobrecarga?.sla || 0}d).`,
         acaoRecomendada: 'Rebalancear carteira de pedidos com compradores com menor volume.'
       },
       {
@@ -226,7 +237,7 @@ class OperationalService {
       SELECT 
         investida_nome as investida,
         COUNT(*) as total_solicitacoes,
-        SUM(CASE WHEN LOWER(status_nome) LIKE '%cota%' THEN 1 ELSE 0 END) as backlog_ativo,
+        SUM(CASE WHEN (numero_solicitacao NOT LIKE 'PC%' OR numero_solicitacao IS NULL) AND status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando entrega', 'Aguardando Entrega') AND LOWER(status_nome) NOT LIKE '%entrega%' THEN 1 ELSE 0 END) as backlog_ativo,
         SUM(CASE WHEN tipo_compra IN ('SPOT_MATERIAIS', 'SPOT_SERVICOS') THEN 1 ELSE 0 END) as qtd_spot,
         SUM(CASE WHEN tipo_compra = 'SPOT_MATERIAIS' THEN 1 ELSE 0 END) as qtd_spot_mat,
         SUM(CASE WHEN tipo_compra = 'SPOT_SERVICOS' THEN 1 ELSE 0 END) as qtd_spot_serv,
@@ -270,8 +281,8 @@ class OperationalService {
       SELECT 
         tipo_compra,
         COUNT(*) as total,
-        SUM(CASE WHEN status_nome IN ('Encerrado', 'Pedido Enviado', 'Aguardando Entrega') THEN 1 ELSE 0 END) as concluidas,
-        SUM(CASE WHEN status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando Entrega') THEN 1 ELSE 0 END) as backlog,
+        SUM(CASE WHEN numero_solicitacao LIKE 'PC%' OR status_nome IN ('Encerrado', 'Pedido Enviado', 'Aguardando Entrega', 'Aguardando entrega') OR data_finalizacao IS NOT NULL THEN 1 ELSE 0 END) as concluidas,
+        SUM(CASE WHEN (numero_solicitacao NOT LIKE 'PC%' OR numero_solicitacao IS NULL) AND status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando Entrega', 'Aguardando entrega') AND LOWER(status_nome) NOT LIKE '%entrega%' THEN 1 ELSE 0 END) as backlog,
         ROUND(COALESCE(AVG(CASE WHEN dias_atendimento_sla IS NOT NULL AND dias_atendimento_sla >= 0 THEN dias_atendimento_sla END), 0), 1) as sla_medio,
         SUM(CASE WHEN dentro_sla IS NOT NULL THEN 1 ELSE 0 END) as com_sla,
         SUM(CASE WHEN dentro_sla = 1 THEN 1 ELSE 0 END) as dentro_sla_count
@@ -432,19 +443,63 @@ class OperationalService {
 
   /**
    * 2. Gestão de Performance e Capacidade dos Compradores
+   * Suporta segmentação por Investida e Tipo de Compra
    */
-  async getBuyersPerformance({ mode = 'ytd', month = 'jul', year = 2026, search = '', sort = 'volume' } = {}) {
+  async getBuyersPerformance({ mode = 'ytd', month = 'jul', year = 2026, search = '', sort = 'volume', investida = '', tipoCompra = '' } = {}) {
     const db = getDatabase();
     const { clause, params, periodName } = this.buildPeriodFilter(mode, month, year);
 
-    const buyerWhere = `${clause} AND comprador IS NOT NULL AND TRIM(comprador) != '' AND comprador != 'Não informado'`;
+    let buyerWhere = `${clause} AND comprador IS NOT NULL AND TRIM(comprador) != '' AND comprador != 'Não informado'`;
+    let queryParams = [...params];
+
+    if (investida && investida.trim() !== '' && investida !== 'todas') {
+      buyerWhere += ' AND investida_nome = ?';
+      queryParams.push(investida.trim());
+    }
+
+    if (tipoCompra && tipoCompra.trim() !== '' && tipoCompra !== 'todos') {
+      if (tipoCompra === 'SPOT') {
+        buyerWhere += " AND tipo_compra IN ('SPOT_MATERIAIS', 'SPOT_SERVICOS')";
+      } else {
+        buyerWhere += ' AND tipo_compra = ?';
+        queryParams.push(tipoCompra.trim());
+      }
+    }
 
     const query = `
       SELECT 
         comprador,
         COUNT(*) as total_solicitacoes,
-        SUM(CASE WHEN LOWER(status_nome) NOT LIKE '%cota%' AND LOWER(status_nome) NOT LIKE '%solicita%' AND LOWER(status_nome) NOT LIKE '%triagem%' AND status_nome != 'Cancelado' THEN 1 ELSE 0 END) as total_atendidas,
-        SUM(CASE WHEN LOWER(status_nome) LIKE '%cota%' THEN 1 ELSE 0 END) as backlog_ativo,
+        SUM(CASE WHEN numero_solicitacao LIKE 'PC%' OR status_nome IN ('Encerrado', 'Pedido Enviado', 'Aguardando entrega', 'Aguardando Entrega') OR data_finalizacao IS NOT NULL THEN 1 ELSE 0 END) as total_atendidas,
+        SUM(CASE WHEN (numero_solicitacao NOT LIKE 'PC%' OR numero_solicitacao IS NULL) AND status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando entrega', 'Aguardando Entrega') AND LOWER(status_nome) NOT LIKE '%entrega%' THEN 1 ELSE 0 END) as backlog_ativo,
+        SUM(CASE 
+          WHEN (numero_solicitacao NOT LIKE 'PC%' OR numero_solicitacao IS NULL) AND status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando entrega', 'Aguardando Entrega') AND LOWER(status_nome) NOT LIKE '%entrega%' AND (
+            CASE 
+              WHEN tipo_compra = 'ESTRATEGICA' THEN 45.0
+              WHEN tipo_compra = 'SPOT_SERVICOS' THEN 15.0
+              ELSE 10.0
+            END >= (
+              CASE 
+                WHEN data_cotacao IS NOT NULL AND data_cotacao != '' THEN (julianday('now', 'localtime') - julianday(data_cotacao))
+                ELSE (julianday('now', 'localtime') - julianday(data_criacao))
+              END
+            )
+          ) THEN 1 ELSE 0 
+        END) as backlog_dentro_sla,
+        SUM(CASE 
+          WHEN (numero_solicitacao NOT LIKE 'PC%' OR numero_solicitacao IS NULL) AND status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando entrega', 'Aguardando Entrega') AND LOWER(status_nome) NOT LIKE '%entrega%' AND (
+            CASE 
+              WHEN tipo_compra = 'ESTRATEGICA' THEN 45.0
+              WHEN tipo_compra = 'SPOT_SERVICOS' THEN 15.0
+              ELSE 10.0
+            END < (
+              CASE 
+                WHEN data_cotacao IS NOT NULL AND data_cotacao != '' THEN (julianday('now', 'localtime') - julianday(data_cotacao))
+                ELSE (julianday('now', 'localtime') - julianday(data_criacao))
+              END
+            )
+          ) THEN 1 ELSE 0 
+        END) as backlog_fora_sla,
         ROUND(COALESCE(AVG(CASE WHEN dias_atendimento_sla IS NOT NULL AND dias_atendimento_sla >= 0 THEN dias_atendimento_sla END), 0), 1) as sla_cotacao_medio,
         SUM(CASE WHEN dentro_sla IS NOT NULL THEN 1 ELSE 0 END) as com_sla,
         SUM(CASE WHEN dentro_sla = 1 THEN 1 ELSE 0 END) as dentro_sla_count,
@@ -457,7 +512,7 @@ class OperationalService {
       ${buyerWhere}
       GROUP BY comprador
     `;
-    const rows = db.prepare(query).all(...params);
+    const rows = db.prepare(query).all(...queryParams);
     const totalGeral = rows.reduce((s, r) => s + r.total_solicitacoes, 0) || 1;
 
     let buyers = rows.map(b => {
@@ -475,6 +530,8 @@ class OperationalService {
         totalSolicitacoes: b.total_solicitacoes,
         totalAtendidas: b.total_atendidas,
         backlogAtivo: b.backlog_ativo,
+        backlogDentroSla: b.backlog_dentro_sla || 0,
+        backlogForaSla: b.backlog_fora_sla || 0,
         shareVolumePct: parseFloat(sharePct),
         slaCotacaoMedio: b.sla_cotacao_medio || 0,
         taxaConformidadePct: taxaConf,
@@ -489,6 +546,28 @@ class OperationalService {
         statusCapacidade
       };
     });
+
+    // Totais Consolidados da Equipe (Filtrados)
+    const totalBacklog = buyers.reduce((s, b) => s + b.backlogAtivo, 0);
+    const totalBacklogDentroSla = buyers.reduce((s, b) => s + b.backlogDentroSla, 0);
+    const totalBacklogForaSla = buyers.reduce((s, b) => s + b.backlogForaSla, 0);
+    const pctBacklogDentroSla = totalBacklog > 0 ? parseFloat(((totalBacklogDentroSla / totalBacklog) * 100).toFixed(1)) : 0;
+    const pctBacklogForaSla = totalBacklog > 0 ? parseFloat(((totalBacklogForaSla / totalBacklog) * 100).toFixed(1)) : 0;
+
+    // Listas distintas de filtros disponíveis
+    const investidasDisponiveis = db.prepare(`
+      SELECT DISTINCT investida_nome 
+      FROM solicitacao_organizer 
+      ${clause} AND investida_nome IS NOT NULL AND TRIM(investida_nome) != ''
+      ORDER BY investida_nome ASC
+    `).all(...params).map(r => r.investida_nome);
+
+    const tiposDisponiveis = [
+      { id: 'todos', label: 'Todos os Tipos' },
+      { id: 'SPOT_MATERIAIS', label: 'Spot Materiais (10d)' },
+      { id: 'SPOT_SERVICOS', label: 'Spot Serviços (15d)' },
+      { id: 'ESTRATEGICA', label: 'Estratégico (45d)' }
+    ];
 
     // Cards Executivos de Destaque
     const sortedByVolume = [...buyers].sort((a, b) => b.totalSolicitacoes - a.totalSolicitacoes);
@@ -511,12 +590,32 @@ class OperationalService {
     if (sort === 'volume') buyers.sort((a, b) => b.totalSolicitacoes - a.totalSolicitacoes);
     else if (sort === 'sla') buyers.sort((a, b) => a.slaCotacaoMedio - b.slaCotacaoMedio);
     else if (sort === 'backlog') buyers.sort((a, b) => b.backlogAtivo - a.backlogAtivo);
+    else if (sort === 'foraSla') buyers.sort((a, b) => b.backlogForaSla - a.backlogForaSla || b.backlogAtivo - a.backlogAtivo);
     else if (sort === 'conformidade') buyers.sort((a, b) => b.taxaConformidadePct - a.taxaConformidadePct);
 
     return {
       periodo: periodName,
       totalCompradores: buyers.length,
       volumeTotalPeriodo: totalGeral,
+      filtrosAtivos: {
+        investida: investida || 'todas',
+        tipoCompra: tipoCompra || 'todos',
+        search: search || '',
+        sort: sort || 'volume'
+      },
+      opcoesFiltros: {
+        investidas: ['todas', ...investidasDisponiveis],
+        tiposCompra: tiposDisponiveis
+      },
+      totaisEquipe: {
+        totalCompradores: buyers.length,
+        volumeTotal: totalGeral,
+        totalBacklog,
+        totalBacklogDentroSla,
+        totalBacklogForaSla,
+        pctBacklogDentroSla,
+        pctBacklogForaSla
+      },
       destaquesExecutivos: execHighlights,
       compradores: buyers
     };
@@ -524,19 +623,49 @@ class OperationalService {
 
   /**
    * 2.1 RAIO-X DETALHADO DO COMPRADOR
+   * Suporta segmentação interna por Investida e Tipo de Compra
    */
-  async getBuyerDetail({ comprador, mode = 'ytd', month = 'jul', year = 2026 } = {}) {
+  async getBuyerDetail({ comprador, mode = 'ytd', month = 'jul', year = 2026, investida = '', tipoCompra = '' } = {}) {
     const db = getDatabase();
     if (!comprador) throw new Error('Nome do comprador é obrigatório');
 
     const { clause, params, periodName } = this.buildPeriodFilter(mode, month, year);
 
-    const resumo = db.prepare(`
+    // 1. Resumo Geral (Total da carteira do comprador no período)
+    const resumoGeralRaw = db.prepare(`
       SELECT 
         comprador,
         COUNT(*) as total_solicitacoes,
-        SUM(CASE WHEN LOWER(status_nome) NOT LIKE '%cota%' AND LOWER(status_nome) NOT LIKE '%solicita%' AND LOWER(status_nome) NOT LIKE '%triagem%' AND status_nome != 'Cancelado' THEN 1 ELSE 0 END) as total_atendidas,
-        SUM(CASE WHEN LOWER(status_nome) LIKE '%cota%' THEN 1 ELSE 0 END) as backlog_ativo,
+        SUM(CASE WHEN numero_solicitacao LIKE 'PC%' OR status_nome IN ('Encerrado', 'Pedido Enviado', 'Aguardando entrega', 'Aguardando Entrega') OR data_finalizacao IS NOT NULL THEN 1 ELSE 0 END) as total_atendidas,
+        SUM(CASE WHEN (numero_solicitacao NOT LIKE 'PC%' OR numero_solicitacao IS NULL) AND status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando entrega', 'Aguardando Entrega') AND LOWER(status_nome) NOT LIKE '%entrega%' THEN 1 ELSE 0 END) as backlog_ativo,
+        SUM(CASE 
+          WHEN (numero_solicitacao NOT LIKE 'PC%' OR numero_solicitacao IS NULL) AND status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando entrega', 'Aguardando Entrega') AND LOWER(status_nome) NOT LIKE '%entrega%' AND (
+            CASE 
+              WHEN tipo_compra = 'ESTRATEGICA' THEN 45.0
+              WHEN tipo_compra = 'SPOT_SERVICOS' THEN 15.0
+              ELSE 10.0
+            END >= (
+              CASE 
+                WHEN data_cotacao IS NOT NULL AND data_cotacao != '' THEN (julianday('now', 'localtime') - julianday(data_cotacao))
+                ELSE (julianday('now', 'localtime') - julianday(data_criacao))
+              END
+            )
+          ) THEN 1 ELSE 0 
+        END) as backlog_dentro_sla,
+        SUM(CASE 
+          WHEN (numero_solicitacao NOT LIKE 'PC%' OR numero_solicitacao IS NULL) AND status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando entrega', 'Aguardando Entrega') AND LOWER(status_nome) NOT LIKE '%entrega%' AND (
+            CASE 
+              WHEN tipo_compra = 'ESTRATEGICA' THEN 45.0
+              WHEN tipo_compra = 'SPOT_SERVICOS' THEN 15.0
+              ELSE 10.0
+            END < (
+              CASE 
+                WHEN data_cotacao IS NOT NULL AND data_cotacao != '' THEN (julianday('now', 'localtime') - julianday(data_cotacao))
+                ELSE (julianday('now', 'localtime') - julianday(data_criacao))
+              END
+            )
+          ) THEN 1 ELSE 0 
+        END) as backlog_fora_sla,
         ROUND(COALESCE(AVG(CASE WHEN dias_atendimento_sla IS NOT NULL AND dias_atendimento_sla >= 0 THEN dias_atendimento_sla END), 0), 1) as sla_cotacao_medio,
         SUM(CASE WHEN dentro_sla IS NOT NULL THEN 1 ELSE 0 END) as com_sla,
         SUM(CASE WHEN dentro_sla = 1 THEN 1 ELSE 0 END) as dentro_sla_count,
@@ -547,21 +676,97 @@ class OperationalService {
       ${clause} AND comprador = ?
     `).get(...params, comprador);
 
-    if (resumo) {
-      resumo.taxa_conformidade_pct = resumo.com_sla > 0 ? parseFloat(((resumo.dentro_sla_count / resumo.com_sla) * 100).toFixed(1)) : 0;
-      resumo.mix = {
-        spotMateriais: resumo.qtd_spot_materiais || 0,
-        spotServicos: resumo.qtd_spot_servicos || 0,
-        estrategica: resumo.qtd_estrategica || 0,
-        spot: (resumo.qtd_spot_materiais || 0) + (resumo.qtd_spot_servicos || 0)
+    const formatResumo = (r) => {
+      if (!r) return null;
+      const conf = r.com_sla > 0 ? parseFloat(((r.dentro_sla_count / r.com_sla) * 100).toFixed(1)) : 0;
+      const pctDentro = r.backlog_ativo > 0 ? parseFloat((((r.backlog_dentro_sla || 0) / r.backlog_ativo) * 100).toFixed(1)) : 0;
+      const pctFora = r.backlog_ativo > 0 ? parseFloat((((r.backlog_fora_sla || 0) / r.backlog_ativo) * 100).toFixed(1)) : 0;
+      return {
+        ...r,
+        taxa_conformidade_pct: conf,
+        pct_backlog_dentro_sla: pctDentro,
+        pct_backlog_fora_sla: pctFora,
+        mix: {
+          spotMateriais: r.qtd_spot_materiais || 0,
+          spotServicos: r.qtd_spot_servicos || 0,
+          estrategica: r.qtd_estrategica || 0,
+          spot: (r.qtd_spot_materiais || 0) + (r.qtd_spot_servicos || 0)
+        }
       };
+    };
+
+    const resumoGeral = formatResumo(resumoGeralRaw);
+
+    // 2. Cláusula Filtrada para o Dossiê
+    let filterClause = `${clause} AND comprador = ?`;
+    let filterParams = [...params, comprador];
+
+    if (investida && investida.trim() !== '' && investida !== 'todas') {
+      filterClause += ' AND investida_nome = ?';
+      filterParams.push(investida.trim());
     }
 
+    if (tipoCompra && tipoCompra.trim() !== '' && tipoCompra !== 'todos') {
+      if (tipoCompra === 'SPOT') {
+        filterClause += " AND tipo_compra IN ('SPOT_MATERIAIS', 'SPOT_SERVICOS')";
+      } else {
+        filterClause += ' AND tipo_compra = ?';
+        filterParams.push(tipoCompra.trim());
+      }
+    }
+
+    const resumoFiltradoRaw = db.prepare(`
+      SELECT 
+        comprador,
+        COUNT(*) as total_solicitacoes,
+        SUM(CASE WHEN numero_solicitacao LIKE 'PC%' OR status_nome IN ('Encerrado', 'Pedido Enviado', 'Aguardando entrega', 'Aguardando Entrega') OR data_finalizacao IS NOT NULL THEN 1 ELSE 0 END) as total_atendidas,
+        SUM(CASE WHEN (numero_solicitacao NOT LIKE 'PC%' OR numero_solicitacao IS NULL) AND status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando entrega', 'Aguardando Entrega') AND LOWER(status_nome) NOT LIKE '%entrega%' THEN 1 ELSE 0 END) as backlog_ativo,
+        SUM(CASE 
+          WHEN (numero_solicitacao NOT LIKE 'PC%' OR numero_solicitacao IS NULL) AND status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando entrega', 'Aguardando Entrega') AND LOWER(status_nome) NOT LIKE '%entrega%' AND (
+            CASE 
+              WHEN tipo_compra = 'ESTRATEGICA' THEN 45.0
+              WHEN tipo_compra = 'SPOT_SERVICOS' THEN 15.0
+              ELSE 10.0
+            END >= (
+              CASE 
+                WHEN data_cotacao IS NOT NULL AND data_cotacao != '' THEN (julianday('now', 'localtime') - julianday(data_cotacao))
+                ELSE (julianday('now', 'localtime') - julianday(data_criacao))
+              END
+            )
+          ) THEN 1 ELSE 0 
+        END) as backlog_dentro_sla,
+        SUM(CASE 
+          WHEN (numero_solicitacao NOT LIKE 'PC%' OR numero_solicitacao IS NULL) AND status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando entrega', 'Aguardando Entrega') AND LOWER(status_nome) NOT LIKE '%entrega%' AND (
+            CASE 
+              WHEN tipo_compra = 'ESTRATEGICA' THEN 45.0
+              WHEN tipo_compra = 'SPOT_SERVICOS' THEN 15.0
+              ELSE 10.0
+            END < (
+              CASE 
+                WHEN data_cotacao IS NOT NULL AND data_cotacao != '' THEN (julianday('now', 'localtime') - julianday(data_cotacao))
+                ELSE (julianday('now', 'localtime') - julianday(data_criacao))
+              END
+            )
+          ) THEN 1 ELSE 0 
+        END) as backlog_fora_sla,
+        ROUND(COALESCE(AVG(CASE WHEN dias_atendimento_sla IS NOT NULL AND dias_atendimento_sla >= 0 THEN dias_atendimento_sla END), 0), 1) as sla_cotacao_medio,
+        SUM(CASE WHEN dentro_sla IS NOT NULL THEN 1 ELSE 0 END) as com_sla,
+        SUM(CASE WHEN dentro_sla = 1 THEN 1 ELSE 0 END) as dentro_sla_count,
+        SUM(CASE WHEN tipo_compra = 'SPOT_SERVICOS' THEN 1 ELSE 0 END) as qtd_spot_servicos,
+        SUM(CASE WHEN tipo_compra = 'SPOT_MATERIAIS' THEN 1 ELSE 0 END) as qtd_spot_materiais,
+        SUM(CASE WHEN tipo_compra = 'ESTRATEGICA' THEN 1 ELSE 0 END) as qtd_estrategica
+      FROM solicitacao_organizer
+      ${filterClause}
+    `).get(...filterParams);
+
+    const resumoFiltrado = formatResumo(resumoFiltradoRaw) || resumoGeral;
+
+    // 3. Performance por Rede Atendida (com indicador de alerta)
     const investidasRaw = db.prepare(`
       SELECT 
         investida_nome as investida,
         COUNT(*) as total_solicitacoes,
-        SUM(CASE WHEN status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando Entrega') THEN 1 ELSE 0 END) as backlog_ativo,
+        SUM(CASE WHEN (numero_solicitacao NOT LIKE 'PC%' OR numero_solicitacao IS NULL) AND status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando entrega', 'Aguardando Entrega') AND LOWER(status_nome) NOT LIKE '%entrega%' THEN 1 ELSE 0 END) as backlog_ativo,
         SUM(CASE WHEN tipo_compra IN ('SPOT_MATERIAIS', 'SPOT_SERVICOS') THEN 1 ELSE 0 END) as qtd_spot,
         SUM(CASE WHEN tipo_compra = 'SPOT_MATERIAIS' THEN 1 ELSE 0 END) as qtd_spot_mat,
         SUM(CASE WHEN tipo_compra = 'SPOT_SERVICOS' THEN 1 ELSE 0 END) as qtd_spot_serv,
@@ -575,7 +780,7 @@ class OperationalService {
       ORDER BY total_solicitacoes DESC
     `).all(...params, comprador);
 
-    const mediaGeralSla = resumo?.sla_cotacao_medio || 0;
+    const mediaGeralSla = resumoGeral?.sla_cotacao_medio || 0;
     const investidas = investidasRaw.map(inv => {
       const taxaConf = inv.com_sla > 0 ? parseFloat(((inv.dentro_sla_count / inv.com_sla) * 100).toFixed(1)) : 0;
       let alerta = 'Normal';
@@ -586,6 +791,34 @@ class OperationalService {
       return { ...inv, taxa_conformidade_pct: taxaConf, alerta };
     });
 
+    // 4. Performance por Modalidade de Compra
+    const modalidadesRaw = db.prepare(`
+      SELECT 
+        CASE 
+          WHEN tipo_compra = 'SPOT_MATERIAIS' THEN 'Spot Materiais'
+          WHEN tipo_compra = 'SPOT_SERVICOS' THEN 'Spot Serviços'
+          WHEN tipo_compra = 'ESTRATEGICA' THEN 'Estratégico'
+          ELSE tipo_compra
+        END as modalidade,
+        tipo_compra,
+        COUNT(*) as total,
+        SUM(CASE WHEN numero_solicitacao LIKE 'PC%' OR status_nome IN ('Encerrado', 'Pedido Enviado', 'Aguardando entrega', 'Aguardando Entrega') OR data_finalizacao IS NOT NULL THEN 1 ELSE 0 END) as concluidas,
+        SUM(CASE WHEN (numero_solicitacao NOT LIKE 'PC%' OR numero_solicitacao IS NULL) AND status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando entrega', 'Aguardando Entrega') AND LOWER(status_nome) NOT LIKE '%entrega%' THEN 1 ELSE 0 END) as backlog,
+        ROUND(COALESCE(AVG(CASE WHEN dias_atendimento_sla IS NOT NULL AND dias_atendimento_sla >= 0 THEN dias_atendimento_sla END), 0), 1) as sla_medio,
+        SUM(CASE WHEN dentro_sla IS NOT NULL THEN 1 ELSE 0 END) as com_sla,
+        SUM(CASE WHEN dentro_sla = 1 THEN 1 ELSE 0 END) as dentro_sla_count
+      FROM solicitacao_organizer
+      ${clause} AND comprador = ?
+      GROUP BY tipo_compra
+      ORDER BY total DESC
+    `).all(...params, comprador);
+
+    const modalidades = modalidadesRaw.map(m => ({
+      ...m,
+      taxa_conformidade_pct: m.com_sla > 0 ? parseFloat(((m.dentro_sla_count / m.com_sla) * 100).toFixed(1)) : 0
+    }));
+
+    // 5. Lista de Requisições / Chamados com filtros aplicados
     const chamadosEmAberto = db.prepare(`
       SELECT 
         id,
@@ -626,17 +859,37 @@ class OperationalService {
         data_finalizacao,
         data_entrega_prevista
       FROM solicitacao_organizer
-      ${clause} AND comprador = ?
+      ${filterClause}
       ORDER BY 
-        CASE WHEN data_finalizacao IS NULL THEN 0 ELSE 1 END,
+        CASE WHEN numero_solicitacao LIKE 'PC%' OR status_nome IN ('Encerrado', 'Pedido Enviado', 'Aguardando entrega', 'Aguardando Entrega') OR data_finalizacao IS NOT NULL THEN 1 ELSE 0 END,
         aging_dias DESC
-    `).all(...params, comprador);
+      LIMIT 150
+    `).all(...filterParams);
+
+    // Listas distintas de filtros para este comprador
+    const investidasComprador = ['todas', ...investidasRaw.map(i => i.investida)];
+    const tiposComprador = [
+      { id: 'todos', label: 'Todos os Tipos' },
+      { id: 'SPOT_MATERIAIS', label: 'Spot Materiais (10d)' },
+      { id: 'SPOT_SERVICOS', label: 'Spot Serviços (15d)' },
+      { id: 'ESTRATEGICA', label: 'Estratégico (45d)' }
+    ];
 
     return {
       comprador,
       periodo: periodName,
-      resumo,
+      filtrosAtivos: {
+        investida: investida || 'todas',
+        tipoCompra: tipoCompra || 'todos'
+      },
+      opcoesFiltros: {
+        investidas: investidasComprador,
+        tiposCompra: tiposComprador
+      },
+      resumoGeral,
+      resumo: resumoFiltrado,
       porInvestida: investidas,
+      porModalidade: modalidades,
       chamadosEmAberto
     };
   }
@@ -647,7 +900,7 @@ class OperationalService {
   async getWorkflowAndBacklog({ mode = 'ytd', month = 'jul', year = 2026 } = {}) {
     const db = getDatabase();
     const { clause, params, periodName } = this.buildPeriodFilter(mode, month, year);
-    const backlogWhere = `${clause} AND status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando Entrega')`;
+    const backlogWhere = `${clause} AND status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando Entrega', 'Aguardando entrega') AND LOWER(status_nome) NOT LIKE '%entrega%'`;
 
     const agingRow = db.prepare(`
       SELECT 
@@ -768,7 +1021,7 @@ class OperationalService {
       SELECT 
         investida_nome as investida,
         COUNT(*) as total_solicitacoes,
-        SUM(CASE WHEN LOWER(status_nome) LIKE '%cota%' THEN 1 ELSE 0 END) as backlog_ativo,
+        SUM(CASE WHEN (numero_solicitacao NOT LIKE 'PC%' OR numero_solicitacao IS NULL) AND status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando entrega', 'Aguardando Entrega') AND LOWER(status_nome) NOT LIKE '%entrega%' THEN 1 ELSE 0 END) as backlog_ativo,
         SUM(CASE WHEN tipo_compra IN ('SPOT_MATERIAIS', 'SPOT_SERVICOS') THEN 1 ELSE 0 END) as qtd_spot,
         SUM(CASE WHEN tipo_compra = 'ESTRATEGICA' THEN 1 ELSE 0 END) as qtd_estrategica,
         ROUND(COALESCE(AVG(CASE WHEN dias_atendimento_sla IS NOT NULL AND dias_atendimento_sla >= 0 THEN dias_atendimento_sla END), 0), 1) as sla_cotacao_medio,
@@ -786,7 +1039,7 @@ class OperationalService {
       SELECT 
         comprador,
         COUNT(*) as total_solicitacoes,
-        SUM(CASE WHEN LOWER(status_nome) LIKE '%cota%' THEN 1 ELSE 0 END) as backlog_ativo,
+        SUM(CASE WHEN (numero_solicitacao NOT LIKE 'PC%' OR numero_solicitacao IS NULL) AND status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando entrega', 'Aguardando Entrega') AND LOWER(status_nome) NOT LIKE '%entrega%' THEN 1 ELSE 0 END) as backlog_ativo,
         SUM(CASE WHEN tipo_compra IN ('SPOT_MATERIAIS', 'SPOT_SERVICOS') THEN 1 ELSE 0 END) as qtd_spot,
         SUM(CASE WHEN tipo_compra = 'SPOT_MATERIAIS' THEN 1 ELSE 0 END) as qtd_spot_mat,
         SUM(CASE WHEN tipo_compra = 'SPOT_SERVICOS' THEN 1 ELSE 0 END) as qtd_spot_serv,
@@ -805,11 +1058,73 @@ class OperationalService {
       taxa_conformidade_pct: c.com_sla > 0 ? parseFloat(((c.dentro_sla_count / c.com_sla) * 100).toFixed(1)) : 0
     }));
 
+    // Backlog de requisições ativas/críticas em cotação da investida
+    const chamadosRaw = db.prepare(`
+      SELECT 
+        id,
+        numero_solicitacao,
+        data_criacao,
+        data_cotacao,
+        data_finalizacao,
+        status_nome,
+        comprador,
+        categoria,
+        tipo_compra,
+        dias_atendimento_sla,
+        dentro_sla,
+        CASE 
+          WHEN data_cotacao IS NOT NULL AND data_cotacao != '' THEN (julianday('now', 'localtime') - julianday(data_cotacao))
+          ELSE (julianday('now', 'localtime') - julianday(data_criacao))
+        END as aging_dias
+      FROM solicitacao_organizer
+      ${clause} AND investida_nome = ? AND LOWER(status_nome) LIKE '%cota%'
+      ORDER BY aging_dias DESC
+      LIMIT 100
+    `).all(...params, investida);
+
+    const chamados = chamadosRaw.map(row => {
+      let metaSla = METAS_OPERACIONAIS.SPOT_MATERIAIS_DIAS;
+      let modalidade = 'Spot Materiais';
+      if (row.tipo_compra === 'ESTRATEGICA') {
+        metaSla = METAS_OPERACIONAIS.ESTRATEGICA_DIAS;
+        modalidade = 'Estratégico';
+      } else if (row.tipo_compra === 'SPOT_SERVICOS') {
+        metaSla = METAS_OPERACIONAIS.SPOT_SERVICOS_DIAS;
+        modalidade = 'Spot Serviços';
+      }
+
+      const aging = Math.max(0, row.aging_dias || 0);
+      const diasRestantes = metaSla - aging;
+
+      let nivelUrgencia = 'no_prazo';
+      let labelUrgencia = 'No Prazo';
+      if (diasRestantes < 0) {
+        nivelUrgencia = 'vencido';
+        labelUrgencia = `Estourado (+${Math.abs(Math.round(diasRestantes))}d)`;
+      } else if (diasRestantes <= 1) {
+        nivelUrgencia = 'critico_24h';
+        labelUrgencia = 'Crítico (< 24h)';
+      } else if (diasRestantes <= 3) {
+        nivelUrgencia = 'alerta_72h';
+        labelUrgencia = 'Alerta (24h-72h)';
+      }
+
+      return {
+        ...row,
+        meta_sla_dias: metaSla,
+        modalidade_compra: modalidade,
+        dias_restantes: diasRestantes,
+        nivel_urgencia: nivelUrgencia,
+        label_urgencia: labelUrgencia
+      };
+    });
+
     return {
       investida,
       periodo: periodName,
       resumo,
-      compradores: compradoresWithPct
+      compradores: compradoresWithPct,
+      chamados
     };
   }
 
@@ -1052,8 +1367,8 @@ class OperationalService {
       SELECT 
         comprador,
         COUNT(*) as total_solicitacoes,
-        SUM(CASE WHEN LOWER(status_nome) NOT LIKE '%cota%' AND LOWER(status_nome) NOT LIKE '%solicita%' AND LOWER(status_nome) NOT LIKE '%triagem%' AND status_nome != 'Cancelado' THEN 1 ELSE 0 END) as total_atendidas,
-        SUM(CASE WHEN LOWER(status_nome) LIKE '%cota%' THEN 1 ELSE 0 END) as backlog_ativo,
+        SUM(CASE WHEN numero_solicitacao LIKE 'PC%' OR status_nome IN ('Pedido Enviado', 'Encerrado', 'Aguardando entrega', 'Aguardando Entrega') OR data_finalizacao IS NOT NULL THEN 1 ELSE 0 END) as total_atendidas,
+        SUM(CASE WHEN (numero_solicitacao NOT LIKE 'PC%' OR numero_solicitacao IS NULL) AND status_nome NOT IN ('Encerrado', 'Cancelado', 'Pedido Enviado', 'Aguardando entrega', 'Aguardando Entrega') AND LOWER(status_nome) NOT LIKE '%entrega%' THEN 1 ELSE 0 END) as backlog_ativo,
         ROUND(COALESCE(AVG(CASE WHEN dias_atendimento_sla IS NOT NULL AND dias_atendimento_sla >= 0 THEN dias_atendimento_sla END), 0), 1) as sla_cotacao_medio,
         SUM(CASE WHEN dentro_sla IS NOT NULL THEN 1 ELSE 0 END) as com_sla,
         SUM(CASE WHEN dentro_sla = 1 THEN 1 ELSE 0 END) as dentro_sla_count,

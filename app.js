@@ -14,9 +14,12 @@ class PlurixApp {
       year: 2026,
       activeTab: 'cockpit',
       buyerSearch: '',
-      buyerSort: 'volume', // 'volume' | 'sla' | 'backlog' | 'conformidade'
+      buyerSort: 'volume', // 'volume' | 'sla' | 'backlog' | 'foraSla' | 'conformidade'
+      buyerInvestida: 'todas',
+      buyerTipoCompra: 'todos',
       investidaSort: 'sla',
       categoriaSort: 'volume',
+      investidasCatSubTab: 'investidas', // 'investidas' | 'categorias'
       data: {
         overview: null,
         compradores: null,
@@ -38,12 +41,24 @@ class PlurixApp {
         subtitle: 'Situação atual, workflow e prioridades de ação em tempo real'
       },
       compradores: {
-        title: 'Gestão da Equipe de Compras',
-        subtitle: 'Produtividade, capacidade e SLA individual por negociador'
+        title: 'Gestão de Compradores & SLA',
+        subtitle: 'Performance individual, capacidade de atendimento e gargalos por investida e modalidade'
+      },
+      investidasCat: {
+        title: 'Visão por Investidas & Categorias',
+        subtitle: 'Desempenho operacional segmentado por rede, loja e família de suprimentos'
+      },
+      rankingSla: {
+        title: 'Ranking Oficial de SLA',
+        subtitle: 'Classificação oficial de conformidade e tempo médio de atendimento da equipe'
+      },
+      fechamentoExec: {
+        title: 'Fechamento Executivo Mensal',
+        subtitle: 'Relatório consolidado de encerramento mensal com saving e conformidade'
       },
       workflow: {
-        title: 'Workflow & Requisições em Aberto',
-        subtitle: 'Funil de solicitações, tempo de cotação e desobstrução de gargalos'
+        title: 'Workflow Operacional & Gargalos',
+        subtitle: 'Fluxo ponta a ponta das requisições e identificação de etapas críticas'
       },
       investidas: {
         title: 'Redes Investidas (Lojas)',
@@ -55,7 +70,7 @@ class PlurixApp {
       },
       alertasSla: {
         title: 'Radar Preditivo de SLA & Vencimentos',
-        subtitle: 'Chamados ativos próximos ao vencimento e gestão ativa de estouros'
+        subtitle: 'Requisições ativas próximas ao vencimento e gestão ativa de estouros'
       },
       buyerDetail: {
         title: 'Raio-X Executivo do Comprador',
@@ -160,13 +175,14 @@ class PlurixApp {
   // 📡 BUSCA DE DADOS NA API
   // =====================================================================
   async fetchRemoteData() {
-    const { mode, month, year, buyerSearch, buyerSort, investidaSort, categoriaSort } = this.state;
+    const { mode, month, year, buyerSearch, buyerSort, buyerInvestida, buyerTipoCompra, investidaSort, categoriaSort } = this.state;
     const queryParams = `mode=${mode}&month=${month}&year=${year}`;
+    const buyerParams = `${queryParams}&search=${encodeURIComponent(buyerSearch)}&sort=${buyerSort}&investida=${encodeURIComponent(buyerInvestida || '')}&tipoCompra=${encodeURIComponent(buyerTipoCompra || '')}`;
 
     try {
       const [overRes, compRes, wfRes, invRes, catRes] = await Promise.all([
         fetch(`/api/v1/operacional/overview?${queryParams}`),
-        fetch(`/api/v1/operacional/compradores?${queryParams}&search=${encodeURIComponent(buyerSearch)}&sort=${buyerSort}`),
+        fetch(`/api/v1/operacional/compradores?${buyerParams}`),
         fetch(`/api/v1/operacional/workflow?${queryParams}`),
         fetch(`/api/v1/operacional/investidas?${queryParams}&sort=${investidaSort}`),
         fetch(`/api/v1/operacional/categorias?${queryParams}&sort=${categoriaSort}`)
@@ -362,8 +378,9 @@ class PlurixApp {
     const statusLower = (ch.status_nome || '').toLowerCase().trim();
     const meta = ch.meta_sla_dias || 10;
     
-    // 1. Finalizadas / Pedido Emitido (Fases 7, 8 e 9: Pedido Enviado, Aguardando Entrega, Encerrado)
-    const isFinished = statusLower === 'encerrado' || statusLower === 'pedido enviado' || statusLower.includes('entrega') || statusLower.includes('concluid');
+    // 1. Finalizadas / Pedido Emitido: possui número de PC gerado, status de pedido/encerramento ou data_finalizacao
+    const hasOrderNumber = ch.numero_solicitacao && String(ch.numero_solicitacao).toUpperCase().startsWith('PC');
+    const isFinished = hasOrderNumber || statusLower === 'encerrado' || statusLower === 'pedido enviado' || statusLower.includes('entrega') || statusLower.includes('concluid') || !!ch.data_finalizacao;
     
     // 2. Pré-Cotação (Fases 1, 2 e 3: Solicitação, Validação, Validação Técnica) - Comprador ainda não iniciou cotação
     const isPreCotacao = statusLower.includes('solicita') || statusLower.includes('valid') || statusLower.includes('triagem') || statusLower.includes('abert');
@@ -432,6 +449,14 @@ class PlurixApp {
   }
 
   switchTab(tabId) {
+    if (tabId === 'investidas') {
+      tabId = 'investidasCategorias';
+      this.state.investidasCatSubTab = 'investidas';
+    } else if (tabId === 'categorias') {
+      tabId = 'investidasCategorias';
+      this.state.investidasCatSubTab = 'categorias';
+    }
+
     this.state.activeTab = tabId;
     
     // Atualiza links da sidebar e bottom nav
@@ -484,11 +509,10 @@ class PlurixApp {
       case 'workflow':
         this.renderWorkflow();
         break;
+      case 'investidasCategorias':
       case 'investidas':
-        this.renderInvestidas();
-        break;
       case 'categorias':
-        this.renderCategorias();
+        this.renderInvestidasCategorias();
         break;
       case 'alertasSla':
         this.renderAlertasSla();
@@ -685,7 +709,7 @@ class PlurixApp {
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
               <div>
                 <div class="card-title" style="font-size:13.5px;">⚡ Radar de Risco &amp; Vencimentos</div>
-                <div class="card-subtitle">Chamados ativos classificados por urgência de atendimento</div>
+                <div class="card-subtitle">Requisições ativas classificadas por urgência de atendimento</div>
               </div>
               <button class="btn btn-subtle btn-sm btn-nav-to-alerts" style="font-size:11px; font-weight:700; padding:4px 8px;">
                 <span>Ver Radar</span>
@@ -694,7 +718,7 @@ class PlurixApp {
             </div>
 
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;">
-              <div class="radar-ranking-item btn-jump-to-alert" data-urgency="vencido" style="cursor:pointer; padding:10px 12px; border-left:3px solid var(--coral);" title="Ver chamados vencidos">
+              <div class="radar-ranking-item btn-jump-to-alert" data-urgency="vencido" style="cursor:pointer; padding:10px 12px; border-left:3px solid var(--coral);" title="Ver requisições vencidas">
                 <div>
                   <div style="font-size:18px; font-weight:900; color:var(--coral); line-height:1.1;">
                     ${Number(radar.vencidos || 0).toLocaleString('pt-BR')}
@@ -706,7 +730,7 @@ class PlurixApp {
                 <span class="pulse-badge vencido" style="font-size:9.5px; padding:1px 5px;">Crítico</span>
               </div>
 
-              <div class="radar-ranking-item btn-jump-to-alert" data-urgency="critico_24h" style="cursor:pointer; padding:10px 12px; border-left:3px solid #F97316;" title="Ver chamados que vencem em < 24h">
+              <div class="radar-ranking-item btn-jump-to-alert" data-urgency="critico_24h" style="cursor:pointer; padding:10px 12px; border-left:3px solid #F97316;" title="Ver requisições que vencem em < 24h">
                 <div>
                   <div style="font-size:18px; font-weight:900; color:#F97316; line-height:1.1;">
                     ${Number(radar.critico24h || 0).toLocaleString('pt-BR')}
@@ -718,7 +742,7 @@ class PlurixApp {
                 <span class="pulse-badge critico_24h" style="font-size:9.5px; padding:1px 5px;">Atenção</span>
               </div>
 
-              <div class="radar-ranking-item btn-jump-to-alert" data-urgency="alerta_72h" style="cursor:pointer; padding:10px 12px; border-left:3px solid var(--amber);" title="Ver chamados que vencem em 24h-72h">
+              <div class="radar-ranking-item btn-jump-to-alert" data-urgency="alerta_72h" style="cursor:pointer; padding:10px 12px; border-left:3px solid var(--amber);" title="Ver requisições que vencem em 24h-72h">
                 <div>
                   <div style="font-size:18px; font-weight:900; color:var(--amber); line-height:1.1;">
                     ${Number(radar.alerta72h || 0).toLocaleString('pt-BR')}
@@ -730,7 +754,7 @@ class PlurixApp {
                 <span class="pulse-badge alerta_72h" style="font-size:9.5px; padding:1px 5px;">Alerta</span>
               </div>
 
-              <div class="radar-ranking-item btn-jump-to-alert" data-urgency="no_prazo" style="cursor:pointer; padding:10px 12px; border-left:3px solid var(--emerald);" title="Ver chamados no prazo">
+              <div class="radar-ranking-item btn-jump-to-alert" data-urgency="no_prazo" style="cursor:pointer; padding:10px 12px; border-left:3px solid var(--emerald);" title="Ver requisições no prazo">
                 <div>
                   <div style="font-size:18px; font-weight:900; color:var(--emerald); line-height:1.1;">
                     ${Number(radar.noPrazo || 0).toLocaleString('pt-BR')}
@@ -878,21 +902,136 @@ class PlurixApp {
     }
 
     const buyers = data.compradores || [];
+    const totais = data.totaisEquipe || {
+      totalCompradores: buyers.length,
+      volumeTotal: buyers.reduce((s, b) => s + (b.totalSolicitacoes || 0), 0),
+      totalBacklog: buyers.reduce((s, b) => s + (b.backlogAtivo || 0), 0),
+      totalBacklogDentroSla: buyers.reduce((s, b) => s + (b.backlogDentroSla || 0), 0),
+      totalBacklogForaSla: buyers.reduce((s, b) => s + (b.backlogForaSla || 0), 0),
+      pctBacklogDentroSla: 0
+    };
+    if (totais.totalBacklog > 0 && !totais.pctBacklogDentroSla) {
+      totais.pctBacklogDentroSla = parseFloat(((totais.totalBacklogDentroSla / totais.totalBacklog) * 100).toFixed(1));
+    }
+
+    const hasActiveFilter = (this.state.buyerInvestida && this.state.buyerInvestida !== 'todas') || (this.state.buyerTipoCompra && this.state.buyerTipoCompra !== 'todos');
 
     container.innerHTML = `
-      <!-- TABELA DE COMPRADORES -->
+      <!-- 1. CARDS DE INDICADORES DA EQUIPE (RECALCULAM COM A SEGMENTAÇÃO) -->
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; margin-bottom:20px;">
+        <div class="card" style="padding:14px 16px; border-top:3px solid var(--plx-primary);">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <div>
+              <div style="font-size:11px; font-weight:800; color:var(--text-muted); text-transform:uppercase;">👥 Equipe de Compras</div>
+              <div style="font-size:22px; font-weight:900; color:var(--text-primary); margin-top:2px;">
+                ${buyers.length} <span style="font-size:11.5px; font-weight:500; color:var(--text-muted);">compradores</span>
+              </div>
+            </div>
+            <span class="sla-badge fast">${hasActiveFilter ? 'Filtrado' : 'Ativos'}</span>
+          </div>
+          <div style="font-size:11px; color:var(--text-secondary); margin-top:6px;">
+            Volume Total: <strong>${Number(totais.volumeTotal || 0).toLocaleString('pt-BR')}</strong> reqs
+          </div>
+        </div>
+
+        <div class="card" style="padding:14px 16px; border-top:3px solid var(--amber);">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <div>
+              <div style="font-size:11px; font-weight:800; color:var(--amber); text-transform:uppercase;">⏳ Em Aberto Total</div>
+              <div style="font-size:22px; font-weight:900; color:var(--amber); margin-top:2px;">
+                ${Number(totais.totalBacklog || 0).toLocaleString('pt-BR')} <span style="font-size:11.5px; font-weight:500; color:var(--text-muted);">reqs</span>
+              </div>
+            </div>
+            <span class="sla-badge warning">Em Cotação</span>
+          </div>
+          <div style="font-size:11px; color:var(--text-muted); margin-top:6px;">
+            Fila ativa em negociação com fornecedores
+          </div>
+        </div>
+
+        <div class="card" style="padding:14px 16px; border-top:3px solid var(--emerald); background:rgba(16, 185, 129, 0.03);">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <div>
+              <div style="font-size:11px; font-weight:800; color:var(--emerald); text-transform:uppercase;">🟢 Em Aberto Dentro do SLA</div>
+              <div style="font-size:22px; font-weight:900; color:var(--emerald); margin-top:2px;">
+                ${Number(totais.totalBacklogDentroSla || 0).toLocaleString('pt-BR')} <span style="font-size:11.5px; font-weight:500; color:var(--text-muted);">reqs</span>
+              </div>
+            </div>
+            <span class="sla-badge fast">${totais.pctBacklogDentroSla || 0}% no Prazo</span>
+          </div>
+          <div style="font-size:11px; color:var(--text-secondary); margin-top:6px;">
+            Requisições ativas dentro da meta oficial de SLA
+          </div>
+        </div>
+
+        <div class="card" style="padding:14px 16px; border-top:3px solid ${totais.totalBacklogForaSla > 0 ? 'var(--coral)' : 'var(--emerald)'}; background:${totais.totalBacklogForaSla > 0 ? 'rgba(239, 68, 68, 0.03)' : 'transparent'};">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <div>
+              <div style="font-size:11px; font-weight:800; color:${totais.totalBacklogForaSla > 0 ? 'var(--coral)' : 'var(--emerald)'}; text-transform:uppercase;">🔴 Em Aberto Fora do SLA</div>
+              <div style="font-size:22px; font-weight:900; color:${totais.totalBacklogForaSla > 0 ? 'var(--coral)' : 'var(--emerald)'}; margin-top:2px;">
+                ${Number(totais.totalBacklogForaSla || 0).toLocaleString('pt-BR')} <span style="font-size:11.5px; font-weight:500; color:var(--text-muted);">reqs</span>
+              </div>
+            </div>
+            <span class="pulse-badge ${totais.totalBacklogForaSla > 0 ? 'vencido' : 'no_prazo'}">${totais.pctBacklogForaSla || 0}% Estouradas</span>
+          </div>
+          <div style="font-size:11px; color:var(--text-secondary); margin-top:6px;">
+            Requisições ativas que já ultrapassaram a meta de SLA
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. TABELA DE COMPRADORES COM SEGMENTAÇÃO POR INVESTIDA & TIPO DE COMPRA -->
       <div class="table-panel">
-        <div class="table-toolbar">
-          <div class="search-input-clean">
-            <i data-lucide="search" style="width:13px; height:13px; color:var(--text-muted);"></i>
-            <input type="text" id="buyerSearchInput" placeholder="Buscar comprador ou loja..." value="${this.state.buyerSearch || ''}">
+        <div class="table-toolbar" style="flex-direction:column; align-items:stretch; gap:12px;">
+          <!-- Linha 1: Filtros de Segmentação Rápida -->
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span style="font-size:12px; font-weight:800; color:var(--text-primary);">🏢 Loja / Investida:</span>
+                <select id="buyerInvestidaFilter" class="select-filter-clean">
+                  <option value="todas" ${this.state.buyerInvestida === 'todas' ? 'selected' : ''}>🏢 Todas as Investidas</option>
+                  ${(data.opcoesFiltros?.investidas || []).filter(i => i !== 'todas').map(inv => `
+                    <option value="${inv}" ${this.state.buyerInvestida === inv ? 'selected' : ''}>${inv}</option>
+                  `).join('')}
+                </select>
+              </div>
+
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span style="font-size:12px; font-weight:800; color:var(--text-primary);">📦 Tipo de Compra:</span>
+                <select id="buyerTipoFilter" class="select-filter-clean">
+                  ${(data.opcoesFiltros?.tiposCompra || []).map(t => `
+                    <option value="${t.id}" ${this.state.buyerTipoCompra === t.id ? 'selected' : ''}>${t.label}</option>
+                  `).join('')}
+                </select>
+              </div>
+
+              ${hasActiveFilter ? `
+                <button id="btnResetBuyerTeamFilters" class="btn btn-secondary btn-sm" style="font-size:11px; padding:4px 8px;">
+                  <i data-lucide="rotate-ccw" style="width:12px; height:12px;"></i>
+                  <span>Limpar Filtros</span>
+                </button>
+              ` : ''}
+            </div>
+
+            <div style="font-size:12px; color:var(--text-muted);">
+              <strong>${buyers.length}</strong> compradores na visualização
+            </div>
           </div>
 
-          <div style="display:flex; gap:4px;">
-            <button class="btn-filter-tag ${this.state.buyerSort === 'volume' ? 'active' : ''}" data-sort="volume">Mais Volume</button>
-            <button class="btn-filter-tag ${this.state.buyerSort === 'sla' ? 'active' : ''}" data-sort="sla">Menor SLA</button>
-            <button class="btn-filter-tag ${this.state.buyerSort === 'backlog' ? 'active' : ''}" data-sort="backlog">Mais em Aberto</button>
-            <button class="btn-filter-tag ${this.state.buyerSort === 'conformidade' ? 'active' : ''}" data-sort="conformidade">% no Prazo</button>
+          <!-- Linha 2: Busca e Ordenação -->
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; border-top:1px solid var(--border-subtle); padding-top:10px;">
+            <div class="search-input-clean" style="max-width:320px;">
+              <i data-lucide="search" style="width:13px; height:13px; color:var(--text-muted);"></i>
+              <input type="text" id="buyerSearchInput" placeholder="Buscar comprador ou loja..." value="${this.state.buyerSearch || ''}">
+            </div>
+
+            <div style="display:flex; gap:4px; flex-wrap:wrap;">
+              <button class="btn-filter-tag ${this.state.buyerSort === 'volume' ? 'active' : ''}" data-sort="volume">Mais Volume</button>
+              <button class="btn-filter-tag ${this.state.buyerSort === 'sla' ? 'active' : ''}" data-sort="sla">Menor SLA</button>
+              <button class="btn-filter-tag ${this.state.buyerSort === 'backlog' ? 'active' : ''}" data-sort="backlog">Mais em Aberto</button>
+              <button class="btn-filter-tag ${this.state.buyerSort === 'foraSla' ? 'active' : ''}" data-sort="foraSla" style="color:var(--coral);">Mais Fora do SLA</button>
+              <button class="btn-filter-tag ${this.state.buyerSort === 'conformidade' ? 'active' : ''}" data-sort="conformidade">% no Prazo</button>
+            </div>
           </div>
         </div>
 
@@ -900,16 +1039,22 @@ class PlurixApp {
           <table class="data-table">
             <thead>
               <tr>
-                <th style="width:28%;">Comprador</th>
-                <th style="width:24%;">Lojas Atendidas</th>
-                <th style="text-align:center; width:12%;">Volume</th>
-                <th style="text-align:center; width:12%;">Em Aberto</th>
+                <th style="width:26%;">Comprador</th>
+                <th style="width:22%;">Lojas Atendidas</th>
+                <th style="text-align:center; width:11%;">Volume</th>
+                <th style="text-align:center; width:15%;">Em Aberto (SLA)</th>
                 <th style="text-align:center; width:12%;">SLA Cotação</th>
-                <th style="text-align:center; width:12%;">Ações</th>
+                <th style="text-align:center; width:14%;">Ações</th>
               </tr>
             </thead>
             <tbody>
-              ${buyers.map(b => {
+              ${buyers.length === 0 ? `
+                <tr>
+                  <td colspan="6" style="text-align:center; padding:35px; color:var(--text-muted);">
+                    Nenhum comprador com atividades para a combinação de Investida / Tipo de Compra selecionada.
+                  </td>
+                </tr>
+              ` : buyers.map(b => {
                 const invPills = (b.investidas || 'Geral').split(',').map(inv => `<span class="tag-pill">${inv.trim()}</span>`).join(' ');
                 return `
                   <tr>
@@ -932,6 +1077,16 @@ class PlurixApp {
                     </td>
                     <td class="center">
                       <strong style="color:${b.backlogAtivo > 50 ? 'var(--amber)' : 'var(--text-primary)'}; font-size:13px;">${Number(b.backlogAtivo).toLocaleString('pt-BR')}</strong>
+                      <div style="display:flex; align-items:center; justify-content:center; gap:4px; margin-top:2px;">
+                        <span class="sla-badge fast" style="font-size:9.5px; padding:1px 5px;" title="${b.backlogDentroSla || 0} requisições no prazo de SLA">
+                          🟢 ${b.backlogDentroSla || 0} no SLA
+                        </span>
+                        ${(b.backlogForaSla || 0) > 0 ? `
+                          <span class="pulse-badge vencido" style="font-size:9.5px; padding:1px 5px;" title="${b.backlogForaSla} requisições estouradas">
+                            🔴 ${b.backlogForaSla} fora
+                          </span>
+                        ` : ''}
+                      </div>
                     </td>
                     <td class="center">
                       ${this.getSlaBadge(b.slaCotacaoMedio)}
@@ -958,6 +1113,31 @@ class PlurixApp {
         if (comp) this.openBuyerDetailModal(comp);
       });
     });
+
+    const selInv = document.getElementById('buyerInvestidaFilter');
+    if (selInv) {
+      selInv.addEventListener('change', (e) => {
+        this.state.buyerInvestida = e.target.value;
+        this.fetchRemoteData().then(() => this.renderCompradores());
+      });
+    }
+
+    const selTipo = document.getElementById('buyerTipoFilter');
+    if (selTipo) {
+      selTipo.addEventListener('change', (e) => {
+        this.state.buyerTipoCompra = e.target.value;
+        this.fetchRemoteData().then(() => this.renderCompradores());
+      });
+    }
+
+    const btnReset = document.getElementById('btnResetBuyerTeamFilters');
+    if (btnReset) {
+      btnReset.addEventListener('click', () => {
+        this.state.buyerInvestida = 'todas';
+        this.state.buyerTipoCompra = 'todos';
+        this.fetchRemoteData().then(() => this.renderCompradores());
+      });
+    }
 
     const searchInput = document.getElementById('buyerSearchInput');
     if (searchInput) {
@@ -1022,8 +1202,8 @@ class PlurixApp {
           data = await res.json();
           solic = data.solicitacao;
         }
-      } catch (e) {
-        console.warn('Fallback para objeto local na timeline:', e);
+      } catch (err) {
+        console.warn('Endpoint de timeline detalhada não disponível, usando dados locais.');
       }
 
       if (!solic && typeof solicitationIdOrObject === 'object') {
@@ -1034,167 +1214,144 @@ class PlurixApp {
         throw new Error('Não foi possível recuperar os dados desta solicitação.');
       }
 
-      const isFinished = !!(solic.data_finalizacao || ['Pedido Enviado', 'Encerrado'].includes(solic.status_nome));
+    const hasOrderNumber = solic.numero_solicitacao && String(solic.numero_solicitacao).toUpperCase().startsWith('PC');
+    const isFinished = !!(hasOrderNumber || solic.data_finalizacao || ['Pedido Enviado', 'Encerrado', 'Aguardando entrega', 'Aguardando Entrega'].includes(solic.status_nome));
       const isOver = (solic.aging_dias || solic.dias_atendimento_sla || 0) > (solic.meta_sla_dias || 10);
 
       if (title) title.textContent = `Solicitação ${solic.numero_solicitacao || `#ORG-${solic.id}`}`;
+      if (subtitle) subtitle.textContent = `${solic.investida_nome || 'Rede'} · ${solic.departamento || 'Geral'} · ${solic.comprador || 'Comprador'}`;
       if (badge) {
         badge.className = `sla-badge ${isFinished ? (isOver ? 'slow' : 'fast') : (isOver ? 'slow' : 'warning')}`;
         badge.textContent = isFinished ? 'Concluída' : (isOver ? `Estourou SLA (+${Math.round((solic.aging_dias || 0) - (solic.meta_sla_dias || 10))}d)` : solic.status_nome);
       }
-      if (subtitle) {
-        subtitle.textContent = `${solic.investida_nome} ${solic.unidade_nome ? `· Loja ${solic.unidade_nome}` : ''} · ${solic.categoria} · ${solic.modalidade_compra || 'Spot'}`;
-      }
 
-      const getDaysDiff = (d1, d2) => {
-        if (!d1 || !d2) return null;
-        const t1 = new Date(d1).getTime();
-        const t2 = new Date(d2).getTime();
-        if (isNaN(t1) || isNaN(t2)) return null;
-        const diff = (t2 - t1) / (1000 * 60 * 60 * 24);
-        return Math.max(0, parseFloat(diff.toFixed(1)));
-      };
-
-      const diff1_2 = getDaysDiff(solic.data_criacao, solic.data_aprovacao);
-      const diff2_3 = getDaysDiff(solic.data_aprovacao || solic.data_criacao, solic.data_cotacao);
-      const diff3_4 = getDaysDiff(solic.data_cotacao || solic.data_aprovacao || solic.data_criacao, solic.data_aprovacao_pedido);
-      const diff4_5 = getDaysDiff(solic.data_aprovacao_pedido || solic.data_cotacao || solic.data_aprovacao || solic.data_criacao, solic.data_finalizacao);
-
-      const formatStepDate = (dt) => {
-        if (!dt) return '<span style="color:var(--text-muted); font-size:11.5px; font-style:italic;">Data não informada (null / pendente)</span>';
-        return `<span style="color:var(--text-primary); font-weight:700; font-size:12.5px;">${this.formatDate(dt)}</span>`;
-      };
-
-      const formatCurrency = (v) => {
-        if (v === null || v === undefined || isNaN(v)) return '—';
-        return Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-      };
+      const diff1_2 = (solic.data_criacao && solic.data_aprovacao) ? this.getCalendarDaysDiff(solic.data_criacao, solic.data_aprovacao) : null;
+      const diff2_3 = (solic.data_aprovacao && solic.data_cotacao) ? this.getCalendarDaysDiff(solic.data_aprovacao, solic.data_cotacao) : null;
+      const diff3_4 = (solic.data_cotacao && solic.data_aprovacao_pedido) ? this.getCalendarDaysDiff(solic.data_cotacao, solic.data_aprovacao_pedido) : null;
+      const diff4_5 = (solic.data_aprovacao_pedido && solic.data_finalizacao) ? this.getCalendarDaysDiff(solic.data_aprovacao_pedido, solic.data_finalizacao) : null;
 
       body.innerHTML = `
-        <!-- CARDS DE INFORMAÇÃO RÁPIDA -->
-        <div class="timeline-info-grid">
-          <div class="timeline-info-card">
-            <span class="timeline-info-label">Comprador</span>
-            <span class="timeline-info-val" style="color:var(--plx-accent);">${solic.comprador || 'Não Atribuído'}</span>
+        <!-- DADOS MESTRES DA REQUISIÇÃO -->
+        <div class="timeline-meta-grid">
+          <div class="timeline-meta-card">
+            <div class="timeline-meta-label">Comprador Responsável</div>
+            <div class="timeline-meta-val">${solic.comprador || 'Não informado'}</div>
           </div>
-          <div class="timeline-info-card">
-            <span class="timeline-info-label">Rede / Loja</span>
-            <span class="timeline-info-val">${solic.investida_nome} ${solic.unidade_nome ? `· ${solic.unidade_nome}` : ''}</span>
+          <div class="timeline-meta-card">
+            <div class="timeline-meta-label">Modalidade &amp; Meta SLA</div>
+            <div class="timeline-meta-val" style="color:var(--plx-accent);">${solic.modalidade_compra || 'Spot'} (${solic.meta_sla_dias || 10} dias)</div>
           </div>
-          <div class="timeline-info-card">
-            <span class="timeline-info-label">Tempo na Fila / Meta</span>
-            <span class="timeline-info-val" style="color:${isOver ? 'var(--coral)' : 'var(--emerald)'};">
-              ${Math.round(solic.aging_dias || solic.dias_atendimento_sla || 0)}d <span style="font-size:11px; color:var(--text-muted); font-weight:600;">(Meta: ${solic.meta_sla_dias || 10}d)</span>
-            </span>
+          <div class="timeline-meta-card">
+            <div class="timeline-meta-label">Aging Total (Dias Corridos)</div>
+            <div class="timeline-meta-val" style="color:${isOver ? 'var(--coral)' : 'var(--emerald)'};">${solic.aging_dias || 0} dias</div>
           </div>
-          <div class="timeline-info-card">
-            <span class="timeline-info-label">Economia (Saving API)</span>
-            <span class="timeline-info-val" style="color:var(--emerald);">
-              ${formatCurrency(solic.saving_operacional)} ${solic.saving_percentual > 0 ? `<span style="font-size:10.5px;">(${solic.saving_percentual}%)</span>` : ''}
-            </span>
+          <div class="timeline-meta-card">
+            <div class="timeline-meta-label">Valor Final Negociado</div>
+            <div class="timeline-meta-val" style="color:var(--emerald);">${solic.valor_final_negociado ? `R$ ${Number(solic.valor_final_negociado).toLocaleString('pt-BR', {minimumFractionDigits: 2})}` : 'Sob Cotação'}</div>
           </div>
         </div>
 
-        <!-- LINHA DO TEMPO / STEPPER DE RASTREABILIDADE -->
-        <div class="timeline-stepper-wrapper">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
-            <div style="font-size:13px; font-weight:800; color:var(--text-primary); display:flex; align-items:center; gap:6px;">
-              <i data-lucide="clock" style="width:15px; height:15px; color:var(--plx-accent);"></i>
-              Marcos Temporais do Workflow de Compras
+        <!-- FLUXO VISUAL TIMELINE STEPPER -->
+        <div style="font-size:13px; font-weight:800; color:var(--text-primary); margin-bottom:14px; text-transform:uppercase; letter-spacing:0.5px;">
+          ⏱️ Esteira de Execução &amp; Lead Time por Etapa
+        </div>
+
+        <div class="timeline-stepper">
+          <!-- ETAPA 1: CRIADA -->
+          <div class="timeline-step">
+            <div class="timeline-step-left">
+              <div class="timeline-step-marker concluido">
+                <i data-lucide="check" style="width:15px; height:15px;"></i>
+              </div>
+              <div class="timeline-step-line ${solic.data_aprovacao ? 'concluido' : 'pendente'}"></div>
             </div>
-            <div style="font-size:11px; color:var(--text-muted);">Status Atual: <strong style="color:var(--text-primary);">${solic.status_nome}</strong></div>
+            <div class="timeline-step-content">
+              <div class="timeline-step-header">
+                <div class="timeline-step-title">1. Solicitação Criada no Sistema</div>
+                <div class="timeline-step-date">${this.formatDate(solic.data_criacao)}</div>
+              </div>
+              <div class="timeline-step-desc">Abertura da requisição pela loja/unidade solicitante (${solic.investida_nome || 'Loja'}).</div>
+              <div class="timeline-step-badge-wrap">
+                <span class="timeline-step-duration" style="background:rgba(16,185,129,0.15); color:var(--emerald);">Início do Ciclo</span>
+              </div>
+            </div>
           </div>
 
-          <div class="timeline-stepper">
-            <!-- ETAPA 1: CRIAÇÃO / ABERTURA -->
-            <div class="timeline-step">
-              <div class="timeline-step-connector ${solic.data_aprovacao || solic.data_cotacao || solic.data_finalizacao ? 'active' : ''}"></div>
-              <div class="timeline-step-marker concluido">
-                <i data-lucide="file-plus" style="width:15px; height:15px;"></i>
+          <!-- ETAPA 2: APROVAÇÃO INTERNA / TRIAGEM -->
+          <div class="timeline-step">
+            <div class="timeline-step-left">
+              <div class="timeline-step-marker ${solic.data_aprovacao ? 'concluido' : (['Solicitação', 'Validação'].includes(solic.status_nome) ? 'em_andamento' : (isFinished ? 'concluido' : 'pendente'))}">
+                <i data-lucide="${solic.data_aprovacao || isFinished ? 'check' : (['Solicitação', 'Validação'].includes(solic.status_nome) ? 'clock' : 'circle-dashed')}" style="width:15px; height:15px;"></i>
               </div>
-              <div class="timeline-step-body">
-                <div>
-                  <div class="timeline-step-title">1. Abertura da Solicitação</div>
-                  <div class="timeline-step-resp">Origem: ${solic.unidade_nome ? `Loja ${solic.unidade_nome}` : 'Solicitante da Loja'} · ${solic.departamento || 'Geral'}</div>
-                </div>
-                <div class="timeline-step-date">
-                  <div class="timeline-step-date-val">${formatStepDate(solic.data_criacao)}</div>
-                  <span class="timeline-step-duration" style="background:rgba(16,185,129,0.15); color:var(--emerald);">Etapa Inicial</span>
-                </div>
+              <div class="timeline-step-line ${solic.data_cotacao ? 'concluido' : 'pendente'}"></div>
+            </div>
+            <div class="timeline-step-content">
+              <div class="timeline-step-header">
+                <div class="timeline-step-title">2. Validação &amp; Liberação para Cotação</div>
+                <div class="timeline-step-date">${this.formatDate(solic.data_aprovacao || solic.data_criacao)}</div>
+              </div>
+              <div class="timeline-step-desc">Aprovação técnica e gerencial prévia antes do envio para a mesa de compras.</div>
+              <div class="timeline-step-badge-wrap">
+                ${diff1_2 !== null ? `<span class="timeline-step-duration" style="background:rgba(0,168,232,0.15); color:var(--plx-accent);">+${diff1_2}d aprovação</span>` : (isFinished ? '<span class="timeline-step-duration" style="background:rgba(16,185,129,0.15); color:var(--emerald);">Liberado</span>' : '<span class="timeline-step-duration" style="background:rgba(100,116,139,0.15); color:var(--text-muted);">Pendente</span>')}
               </div>
             </div>
+          </div>
 
-            <!-- ETAPA 2: APROVAÇÃO DA SOLICITAÇÃO -->
-            <div class="timeline-step">
-              <div class="timeline-step-connector ${solic.data_cotacao || solic.data_finalizacao ? 'active' : ''}"></div>
-              <div class="timeline-step-marker ${solic.data_aprovacao ? 'concluido' : (solic.status_nome === 'Solicitação' ? 'em_andamento' : 'pendente')}">
-                <i data-lucide="${solic.data_aprovacao ? 'check' : (solic.status_nome === 'Solicitação' ? 'loader' : 'circle-dashed')}" style="width:15px; height:15px;"></i>
-              </div>
-              <div class="timeline-step-body">
-                <div>
-                  <div class="timeline-step-title">
-                    2. Triagem &amp; Aprovação da Requisição
-                    ${!solic.data_aprovacao && solic.status_nome !== 'Solicitação' ? '<span style="font-size:10px; font-weight:700; color:var(--text-muted); background:var(--surface-card); padding:1px 6px; border-radius:4px; margin-left:4px;">Aprovado Direto</span>' : ''}
-                  </div>
-                  <div class="timeline-step-resp">Alçada: Gestor da Área / Planejamento Orçamentário</div>
-                </div>
-                <div class="timeline-step-date">
-                  <div class="timeline-step-date-val">${formatStepDate(solic.data_aprovacao)}</div>
-                  ${diff1_2 !== null ? `<span class="timeline-step-duration" style="background:rgba(0,168,232,0.15); color:var(--plx-accent);">+${diff1_2}d após criação</span>` : (solic.data_aprovacao ? '<span class="timeline-step-duration" style="background:rgba(16,185,129,0.15); color:var(--emerald);">Concluído</span>' : '<span class="timeline-step-duration" style="background:rgba(100,116,139,0.15); color:var(--text-muted);">Pendente</span>')}
-                </div>
-              </div>
-            </div>
-
-            <!-- ETAPA 3: COTAÇÃO / NEGOCIAÇÃO -->
-            <div class="timeline-step">
-              <div class="timeline-step-connector ${solic.data_aprovacao_pedido || solic.data_finalizacao ? 'active' : ''}"></div>
+          <!-- ETAPA 3: COTAÇÃO / NEGOCIAÇÃO -->
+          <div class="timeline-step">
+            <div class="timeline-step-left">
               <div class="timeline-step-marker ${solic.data_cotacao ? 'concluido' : (['Cotacao', 'Em Cotação', 'Validação Técnica'].includes(solic.status_nome) ? 'em_andamento' : (isFinished ? 'concluido' : 'pendente'))}">
                 <i data-lucide="${solic.data_cotacao || isFinished ? 'check' : (['Cotacao', 'Em Cotação', 'Validação Técnica'].includes(solic.status_nome) ? 'search' : 'circle-dashed')}" style="width:15px; height:15px;"></i>
               </div>
-              <div class="timeline-step-body">
-                <div>
-                  <div class="timeline-step-title">3. Envio e Negociação de Cotação</div>
-                  <div class="timeline-step-resp">Responsável: ${solic.comprador || 'Comprador Indiretas'} · Menor Proposta: ${formatCurrency(solic.valor_menor_cotado)}</div>
-                </div>
-                <div class="timeline-step-date">
-                  <div class="timeline-step-date-val">${formatStepDate(solic.data_cotacao)}</div>
-                  ${diff2_3 !== null ? `<span class="timeline-step-duration" style="background:rgba(0,168,232,0.15); color:var(--plx-accent);">+${diff2_3}d em negociação</span>` : (solic.dias_atendimento_sla > 0 ? `<span class="timeline-step-duration" style="background:rgba(0,168,232,0.15); color:var(--plx-accent);">${solic.dias_atendimento_sla}d SLA Cotação</span>` : (isFinished ? '<span class="timeline-step-duration" style="background:rgba(16,185,129,0.15); color:var(--emerald);">Concluído</span>' : '<span class="timeline-step-duration" style="background:rgba(100,116,139,0.15); color:var(--text-muted);">Pendente</span>'))}
-                </div>
+              <div class="timeline-step-line ${solic.data_aprovacao_pedido ? 'concluido' : 'pendente'}"></div>
+            </div>
+            <div class="timeline-step-content">
+              <div class="timeline-step-header">
+                <div class="timeline-step-title">3. Mesa de Compras (Cotação &amp; Negociação)</div>
+                <div class="timeline-step-date">${this.formatDate(solic.data_cotacao || (isFinished ? solic.data_aprovacao : null))}</div>
+              </div>
+              <div class="timeline-step-desc">Cotação com fornecedores pelo comprador <strong>${solic.comprador || 'Comprador'}</strong>. Fornecedor: <em>${solic.fornecedor_vencedor || 'Em negociação'}</em>.</div>
+              <div class="timeline-step-badge-wrap">
+                ${diff2_3 !== null ? `<span class="timeline-step-duration" style="background:rgba(0,168,232,0.15); color:var(--plx-accent);">+${diff2_3}d em negociação</span>` : (solic.dias_atendimento_sla > 0 ? `<span class="timeline-step-duration" style="background:rgba(0,168,232,0.15); color:var(--plx-accent);">${solic.dias_atendimento_sla}d SLA Cotação</span>` : (isFinished ? '<span class="timeline-step-duration" style="background:rgba(16,185,129,0.15); color:var(--emerald);">Concluído</span>' : '<span class="timeline-step-duration" style="background:rgba(100,116,139,0.15); color:var(--text-muted);">Pendente</span>'))}
               </div>
             </div>
+          </div>
 
-            <!-- ETAPA 4: APROVAÇÃO DO PEDIDO DE COMPRA -->
-            <div class="timeline-step">
-              <div class="timeline-step-connector ${solic.data_finalizacao ? 'active' : ''}"></div>
+          <!-- ETAPA 4: APROVAÇÃO DO PEDIDO (ALÇADA) -->
+          <div class="timeline-step">
+            <div class="timeline-step-left">
               <div class="timeline-step-marker ${solic.data_aprovacao_pedido ? 'concluido' : (['Aprovação', 'Em Aprovação'].includes(solic.status_nome) ? 'em_andamento' : (isFinished ? 'concluido' : 'pendente'))}">
                 <i data-lucide="${solic.data_aprovacao_pedido || isFinished ? 'check' : (['Aprovação', 'Em Aprovação'].includes(solic.status_nome) ? 'hourglass' : 'circle-dashed')}" style="width:15px; height:15px;"></i>
               </div>
-              <div class="timeline-step-body">
-                <div>
-                  <div class="timeline-step-title">4. Aprovação da Ordem de Compra</div>
-                  <div class="timeline-step-resp">Alçada Financeira / Diretoria · Valor Negociado: ${formatCurrency(solic.valor_final_negociado)}</div>
-                </div>
-                <div class="timeline-step-date">
-                  <div class="timeline-step-date-val">${formatStepDate(solic.data_aprovacao_pedido)}</div>
-                  ${diff3_4 !== null ? `<span class="timeline-step-duration" style="background:rgba(0,168,232,0.15); color:var(--plx-accent);">+${diff3_4}d aprovação OC</span>` : (isFinished ? '<span class="timeline-step-duration" style="background:rgba(16,185,129,0.15); color:var(--emerald);">Concluído</span>' : '<span class="timeline-step-duration" style="background:rgba(100,116,139,0.15); color:var(--text-muted);">Pendente</span>')}
-                </div>
+              <div class="timeline-step-line ${solic.data_finalizacao ? 'concluido' : 'pendente'}"></div>
+            </div>
+            <div class="timeline-step-content">
+              <div class="timeline-step-header">
+                <div class="timeline-step-title">4. Aprovação de Alçada &amp; Emissão da OC</div>
+                <div class="timeline-step-date">${this.formatDate(solic.data_aprovacao_pedido || (isFinished ? solic.data_aprovacao : null))}</div>
+              </div>
+              <div class="timeline-step-desc">Validação de valor por diretoria/alçada e formalização do Pedido de Compra no ERP.</div>
+              <div class="timeline-step-badge-wrap">
+                ${diff3_4 !== null ? `<span class="timeline-step-duration" style="background:rgba(0,168,232,0.15); color:var(--plx-accent);">+${diff3_4}d aprovação OC</span>` : (isFinished ? '<span class="timeline-step-duration" style="background:rgba(16,185,129,0.15); color:var(--emerald);">Concluído</span>' : '<span class="timeline-step-duration" style="background:rgba(100,116,139,0.15); color:var(--text-muted);">Pendente</span>')}
               </div>
             </div>
+          </div>
 
-            <!-- ETAPA 5: PEDIDO ENVIADO / CONCLUSÃO -->
-            <div class="timeline-step">
+          <!-- ETAPA 5: PEDIDO ENVIADO / CONCLUÍDO -->
+          <div class="timeline-step">
+            <div class="timeline-step-left">
               <div class="timeline-step-marker ${isFinished ? 'concluido' : 'pendente'}">
                 <i data-lucide="${isFinished ? 'check-check' : 'circle-dashed'}" style="width:15px; height:15px;"></i>
               </div>
-              <div class="timeline-step-body">
-                <div>
-                  <div class="timeline-step-title">5. Pedido Enviado / Encerramento</div>
-                  <div class="timeline-step-resp">Fornecedor: ${solic.fornecedor_vencedor || 'Não informado'} ${solic.data_entrega_prevista ? `· Entrega Prevista: ${this.formatDate(solic.data_entrega_prevista)}` : ''}</div>
-                </div>
-                <div class="timeline-step-date">
-                  <div class="timeline-step-date-val">${formatStepDate(solic.data_finalizacao)}</div>
-                  ${isFinished ? `<span class="timeline-step-duration" style="background:rgba(16,185,129,0.15); color:var(--emerald);">${isOver ? 'Concluído com Atraso' : 'Finalizado no Prazo'}</span>` : '<span class="timeline-step-duration" style="background:rgba(245,158,11,0.15); color:var(--amber);">Em Aberto / Fila Ativa</span>'}
-                </div>
+            </div>
+            <div class="timeline-step-content">
+              <div class="timeline-step-header">
+                <div class="timeline-step-title">5. Pedido Emitido / Processo Encerrado</div>
+                <div class="timeline-step-date">${this.formatDate(solic.data_finalizacao || (isFinished ? (solic.data_aprovacao_pedido || solic.data_cotacao || solic.data_criacao) : null))}</div>
+              </div>
+              <div class="timeline-step-desc">Ordem de compra emitida e despachada ao fornecedor vencedor.</div>
+              <div class="timeline-step-badge-wrap">
+                ${isFinished ? `<span class="timeline-step-duration" style="background:rgba(16,185,129,0.15); color:var(--emerald);">${isOver ? 'Concluído com Atraso' : 'Finalizado no Prazo'}</span>` : '<span class="timeline-step-duration" style="background:rgba(245,158,11,0.15); color:var(--amber);">Em Aberto / Fila Ativa</span>'}
               </div>
             </div>
           </div>
@@ -1202,18 +1359,18 @@ class PlurixApp {
       `;
 
       if (window.lucide) window.lucide.createIcons();
-
-    } catch (err) {
+    } catch (e) {
       body.innerHTML = `
         <div style="padding:30px; text-align:center; color:var(--coral);">
-          <div style="font-weight:800; font-size:14px; margin-bottom:6px;">Erro ao carregar Linha do Tempo</div>
-          <div style="font-size:12px; color:var(--text-muted);">${err.message}</div>
+          <i data-lucide="alert-circle" style="width:32px; height:32px; margin-bottom:8px;"></i>
+          <div style="font-weight:700;">Erro ao carregar linha do tempo</div>
+          <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">${e.message}</div>
         </div>
       `;
+      if (window.lucide) window.lucide.createIcons();
     }
   }
 
-  // =====================================================================
   // =====================================================================
   // 🔍 RAIO-X EXECUTIVO DO COMPRADOR (FULL-PAGE DOSSIER VIEW)
   // =====================================================================
@@ -1223,6 +1380,9 @@ class PlurixApp {
 
   async openBuyerDetail(compradorName) {
     this._currentBuyerName = compradorName;
+    this._buyerInvestidaFilter = this._buyerInvestidaFilter || 'todas';
+    this._buyerTipoFilter = this._buyerTipoFilter || 'todos';
+
     const pane = document.getElementById('buyerDetailPane');
     const container = document.getElementById('buyerDetailContent');
     if (!pane || !container) return;
@@ -1247,301 +1407,509 @@ class PlurixApp {
     // Rolar suavemente para o topo
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
-    try {
-      const { mode, month, year } = this.state;
-      const res = await fetch(`/api/v1/operacional/comprador-detalhe?comprador=${encodeURIComponent(compradorName)}&mode=${mode}&month=${month}&year=${year}`);
-      if (!res.ok) throw new Error('Falha ao carregar dossiê do comprador');
-      const data = await res.json();
+    const loadDossierData = async () => {
+      try {
+        const { mode, month, year } = this.state;
+        const res = await fetch(`/api/v1/operacional/comprador-detalhe?comprador=${encodeURIComponent(compradorName)}&mode=${mode}&month=${month}&year=${year}&investida=${encodeURIComponent(this._buyerInvestidaFilter)}&tipoCompra=${encodeURIComponent(this._buyerTipoFilter)}`);
+        if (!res.ok) throw new Error('Falha ao carregar dossiê do comprador');
+        const data = await res.json();
 
-      const r = data.resumo || {};
-      const investidas = data.porInvestida || [];
-      const chamados = data.chamadosEmAberto || [];
+        const rGeral = data.resumoGeral || data.resumo || {};
+        const r = data.resumo || {};
+        const investidas = data.porInvestida || [];
+        const modalidades = data.porModalidade || [];
+        const chamados = data.chamadosEmAberto || [];
 
-      // Estado dos chamados para filtro e busca interna
-      this._buyerChamados = chamados;
-      this._buyerFilterStatus = 'todos';
-      this._buyerSearchQuery = '';
+        // Estado dos chamados para filtro e busca interna
+        this._buyerChamados = chamados;
+        this._buyerFilterStatus = this._buyerFilterStatus || 'todos';
+        this._buyerSearchQuery = this._buyerSearchQuery || '';
 
-      const renderDossier = () => {
-        let filtrados = this._buyerChamados;
-        if (this._buyerFilterStatus !== 'todos') {
-          if (this._buyerFilterStatus === 'concluidos') {
-            filtrados = filtrados.filter(c => this.getTicketSlaEvaluation(c).isFinished);
-          } else if (this._buyerFilterStatus === 'cotacao') {
-            filtrados = filtrados.filter(c => this.getTicketSlaEvaluation(c).isEmCotacao);
-          } else if (this._buyerFilterStatus === 'aprovacao') {
-            filtrados = filtrados.filter(c => {
-              const st = (c.status_nome || '').toLowerCase();
-              return st.includes('aprov') || st.includes('valid');
-            });
-          } else if (this._buyerFilterStatus === 'atrasados') {
-            filtrados = filtrados.filter(c => this.getTicketSlaEvaluation(c).isOver);
+        const hasDossierFilter = (this._buyerInvestidaFilter !== 'todas' || this._buyerTipoFilter !== 'todos');
+
+        const renderDossier = () => {
+          let filtrados = this._buyerChamados;
+          if (this._buyerFilterStatus !== 'todos') {
+            if (this._buyerFilterStatus === 'concluidos') {
+              filtrados = filtrados.filter(c => this.getTicketSlaEvaluation(c).isFinished);
+            } else if (this._buyerFilterStatus === 'cotacao') {
+              filtrados = filtrados.filter(c => this.getTicketSlaEvaluation(c).isEmCotacao);
+            } else if (this._buyerFilterStatus === 'aprovacao') {
+              filtrados = filtrados.filter(c => {
+                const st = (c.status_nome || '').toLowerCase();
+                return st.includes('aprov') || st.includes('valid');
+              });
+            } else if (this._buyerFilterStatus === 'atrasados') {
+              filtrados = filtrados.filter(c => this.getTicketSlaEvaluation(c).isOver);
+            }
           }
-        }
 
-        if (this._buyerSearchQuery && this._buyerSearchQuery.trim() !== '') {
-          const q = this._buyerSearchQuery.toLowerCase().trim();
-          filtrados = filtrados.filter(c => 
-            (c.numero_solicitacao && String(c.numero_solicitacao).toLowerCase().includes(q)) ||
-            (c.id && String(c.id).includes(q)) ||
-            (c.categoria && c.categoria.toLowerCase().includes(q)) ||
-            (c.investida_nome && c.investida_nome.toLowerCase().includes(q)) ||
-            (c.status_nome && c.status_nome.toLowerCase().includes(q))
-          );
-        }
+          if (this._buyerSearchQuery && this._buyerSearchQuery.trim() !== '') {
+            const q = this._buyerSearchQuery.toLowerCase().trim();
+            filtrados = filtrados.filter(c => 
+              (c.numero_solicitacao && String(c.numero_solicitacao).toLowerCase().includes(q)) ||
+              (c.id && String(c.id).includes(q)) ||
+              (c.categoria && c.categoria.toLowerCase().includes(q)) ||
+              (c.investida_nome && c.investida_nome.toLowerCase().includes(q)) ||
+              (c.status_nome && c.status_nome.toLowerCase().includes(q))
+            );
+          }
 
-        container.innerHTML = `
-          <!-- 1. CABEÇALHO EXECUTIVO DO COMPRADOR COM BOTÃO DE VOLTAR -->
-          <div class="dossier-header-bar">
-            <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
-              <button class="dossier-back-btn" id="btnBackFromBuyerDetail">
-                <i data-lucide="arrow-left" style="width:14px; height:14px;"></i>
-                <span>Voltar para Compradores</span>
-              </button>
+          container.innerHTML = `
+            <!-- 1. CABEÇALHO EXECUTIVO DO COMPRADOR -->
+            <div class="dossier-header-bar" style="background:var(--surface-card); border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:16px 20px; margin-bottom:14px; box-shadow:var(--shadow-card); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px;">
+              <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+                <button class="dossier-back-btn" id="btnBackFromBuyerDetail" style="background:var(--surface-subtle); border:1px solid var(--border-subtle); border-radius:8px; padding:8px 14px; color:var(--text-primary); font-size:12px; font-weight:700; display:flex; align-items:center; gap:8px; cursor:pointer; transition:var(--transition-fast);">
+                  <i data-lucide="arrow-left" style="width:15px; height:15px; color:var(--plx-primary);"></i>
+                  <span>Voltar para Compradores</span>
+                </button>
 
-              <div class="dossier-user-info">
-                <div class="dossier-user-avatar">${this.getInitials(compradorName)}</div>
-                <div>
-                  <div class="dossier-user-name">${compradorName}</div>
-                  <div class="dossier-user-meta">
-                    ${data.periodo} · <strong>${Number(r.total_solicitacoes || 0).toLocaleString('pt-BR')} requisições totais</strong> · SLA Médio: <strong>${r.sla_cotacao_medio || 0} dias</strong>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div style="display:flex; align-items:center; gap:8px;">
-              <span class="tag-pill" style="padding:4px 8px; font-size:11px; font-weight:800;">
-                💼 Carteira: ${(r.mix?.spotMateriais || 0)} Mat · ${(r.mix?.spotServicos || 0)} Serv · ${(r.mix?.estrategica || 0)} Estrat
-              </span>
-            </div>
-          </div>
-
-          <!-- 2. OS 4 GRANDES NÚMEROS DO COMPRADOR (HERO KPIS EM TELA CHEIA) -->
-          <div class="dossier-kpis-grid">
-            <div class="dossier-kpi-card primary">
-              <div class="dossier-kpi-title">Volume Total</div>
-              <div class="dossier-kpi-number">${Number(r.total_solicitacoes || 0).toLocaleString('pt-BR')}</div>
-              <div class="dossier-kpi-sub">
-                Spot: <strong>${Number((r.mix?.spotMateriais || 0) + (r.mix?.spotServicos || 0)).toLocaleString('pt-BR')}</strong> · Estratégico: <strong>${Number(r.mix?.estrategica || 0).toLocaleString('pt-BR')}</strong>
-              </div>
-            </div>
-
-            <div class="dossier-kpi-card amber">
-              <div class="dossier-kpi-title" style="color:var(--amber);">Em Aberto</div>
-              <div class="dossier-kpi-number" style="color:var(--amber);">${Number(r.backlog_ativo || 0).toLocaleString('pt-BR')}</div>
-              <div class="dossier-kpi-sub" style="color:var(--amber);">
-                <i data-lucide="clock" style="width:11px; height:11px; display:inline-block; vertical-align:middle;"></i>
-                <strong>${Number(r.total_atendidas || 0).toLocaleString('pt-BR')}</strong> concluídas / entregues
-              </div>
-            </div>
-
-            <div class="dossier-kpi-card accent">
-              <div class="dossier-kpi-title">SLA Médio de Cotação</div>
-              <div class="dossier-kpi-number" style="color:var(--plx-accent);">${r.sla_cotacao_medio || 0}<span style="font-size:14px; color:var(--text-muted); margin-left:2px;">dias</span></div>
-              <div class="dossier-kpi-sub">
-                Mat: <strong>${r.mix?.spotMateriais || 0}</strong> · Serv: <strong>${r.mix?.spotServicos || 0}</strong>
-              </div>
-            </div>
-
-            <div class="dossier-kpi-card emerald">
-              <div class="dossier-kpi-title">Taxa de Conformidade</div>
-              <div class="dossier-kpi-number" style="color:var(--emerald);">${Math.round(r.taxa_conformidade_pct || 100)}%</div>
-              <div class="dossier-kpi-sub">
-                <span style="color:var(--text-secondary); font-size:11px;"><strong>${Number(r.dentro_sla_count || 0).toLocaleString('pt-BR')}</strong> de <strong>${Number(r.com_sla || 0).toLocaleString('pt-BR')}</strong> no prazo</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- 3. PERFORMANCE POR REDE / LOJA ATENDIDA (ESPAÇOSA E VISUAL) -->
-          <div class="card" style="margin-bottom:20px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
-              <div>
-                <div class="card-title">🏢 Performance por Rede Atendida</div>
-                <div class="card-subtitle">Volumetria, segregação Spot vs Estratégica e SLA de cotação por rede</div>
-              </div>
-              <span style="font-size:11.5px; color:var(--text-muted);">${investidas.length} redes na carteira</span>
-            </div>
-
-            <div class="dossier-stores-grid">
-              ${investidas.map(inv => {
-                const isSlow = inv.alerta === 'Gargalo Crítico nesta Investida' || inv.sla_cotacao_medio > 15;
-                return `
-                  <div class="dossier-store-card" style="border-top:3px solid ${isSlow ? 'var(--coral)' : 'var(--emerald)'};">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                      <div class="dossier-store-name">${inv.investida}</div>
-                      <span class="sla-badge ${isSlow ? 'slow' : 'fast'}" style="font-size:10px;">
-                        ${isSlow ? 'Atenção' : 'Ágil'}
+                <div class="dossier-user-info">
+                  <div class="dossier-user-avatar">${this.getInitials(compradorName)}</div>
+                  <div>
+                    <div class="dossier-user-name">
+                      <span>${compradorName}</span>
+                      <span class="tag-pill" style="font-size:10.5px; font-weight:800; padding:2px 8px; background:${(rGeral.sla_cotacao_medio || 0) <= 15 ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)'}; color:${(rGeral.sla_cotacao_medio || 0) <= 15 ? 'var(--emerald)' : 'var(--coral)'};">
+                        ${(rGeral.sla_cotacao_medio || 0) <= 10 ? '⚡ Alta Agilidade' : ((rGeral.sla_cotacao_medio || 0) <= 20 ? '⚖️ Operação Regular' : '⚠️ Atenção Gargalo')}
                       </span>
                     </div>
-                    <div style="font-size:11.5px; color:var(--text-muted); margin:4px 0 6px;">
-                      Vol: <strong>${Number(inv.total_solicitacoes).toLocaleString('pt-BR')}</strong> · Aberto: <strong>${Number(inv.backlog_ativo).toLocaleString('pt-BR')}</strong>
-                    </div>
-                    <div style="font-size:10.5px; color:var(--text-secondary); margin-bottom:6px;">
-                      Mat: <strong>${inv.qtd_spot_mat || 0}</strong> · Serv: <strong>${inv.qtd_spot_serv || 0}</strong> · Estrat: <strong>${inv.qtd_estrategica || 0}</strong>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; align-items:center; padding-top:6px; border-top:1px solid var(--border-subtle);">
-                      <span style="font-size:11px; color:var(--text-secondary);">SLA Cotação:</span>
-                      <strong style="color:${isSlow ? 'var(--coral)' : 'var(--emerald)'}; font-size:13px;">${inv.sla_cotacao_medio}d</strong>
+                    <div class="dossier-user-meta">
+                      <span>${data.periodo}</span>
+                      <span style="opacity:0.4;">•</span>
+                      <span>Carteira Total: <strong>${Number(rGeral.total_solicitacoes || 0).toLocaleString('pt-BR')} requisições</strong></span>
+                      <span style="opacity:0.4;">•</span>
+                      <span>SLA Médio Geral: <strong>${rGeral.sla_cotacao_medio || 0} dias</strong></span>
                     </div>
                   </div>
-                `;
-              }).join('')}
-            </div>
-          </div>
-
-          <!-- 4. FILA E HISTÓRICO COMPLETO DE SOLICITAÇÕES (TABELA AMPLA COM BUSCA E FILTROS) -->
-          <div class="dossier-table-panel">
-            <div class="dossier-table-toolbar">
-              <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                <div class="search-input-clean">
-                  <i data-lucide="search" style="width:13px; height:13px; color:var(--text-muted);"></i>
-                  <input type="text" id="buyerDossierSearch" placeholder="Buscar por número, loja ou categoria..." value="${this._buyerSearchQuery}">
-                </div>
-
-                <div style="display:flex; gap:4px; flex-wrap:wrap;">
-                  <button class="btn-filter-tag ${this._buyerFilterStatus === 'todos' ? 'active' : ''}" data-filter="todos">Todas (${chamados.length})</button>
-                  <button class="btn-filter-tag ${this._buyerFilterStatus === 'cotacao' ? 'active' : ''}" data-filter="cotacao">Em Cotação</button>
-                  <button class="btn-filter-tag ${this._buyerFilterStatus === 'aprovacao' ? 'active' : ''}" data-filter="aprovacao">Em Aprovação</button>
-                  <button class="btn-filter-tag ${this._buyerFilterStatus === 'atrasados' ? 'active' : ''}" data-filter="atrasados" style="color:var(--coral);">⚠️ Estourou SLA</button>
-                  <button class="btn-filter-tag ${this._buyerFilterStatus === 'concluidos' ? 'active' : ''}" data-filter="concluidos">Concluídas</button>
                 </div>
               </div>
 
-              <span style="font-size:11.5px; color:var(--text-muted);">
-                Exibindo <strong>${filtrados.length}</strong> de ${chamados.length} solicitações
-              </span>
+              <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                <span style="font-size:11px; font-weight:700; color:var(--text-muted); margin-right:4px;">Mix Geral:</span>
+                <span class="tag-pill" style="padding:4px 9px; font-size:11px; font-weight:800; background:rgba(0,26,143,0.08); color:var(--plx-primary);">
+                  📦 ${rGeral.mix?.spotMateriais || 0} Mat
+                </span>
+                <span class="tag-pill" style="padding:4px 9px; font-size:11px; font-weight:800; background:rgba(0,168,232,0.1); color:var(--plx-accent);">
+                  🛠️ ${rGeral.mix?.spotServicos || 0} Serv
+                </span>
+                <span class="tag-pill" style="padding:4px 9px; font-size:11px; font-weight:800; background:rgba(139,92,246,0.1); color:#8B5CF6;">
+                  🏢 ${rGeral.mix?.estrategica || 0} Estrat
+                </span>
+              </div>
             </div>
 
-            <div style="overflow-x: auto;">
-              <table class="data-table" style="min-width: 1100px;">
-                <thead>
-                  <tr>
-                    <th style="min-width:130px;">Solicitação</th>
-                    <th style="min-width:110px;">Data Cotação</th>
-                    <th style="min-width:110px;">Pedido Enviado</th>
-                    <th style="min-width:110px;">Etapa Atual</th>
-                    <th style="min-width:110px;">Finalização</th>
-                    <th style="min-width:130px;">Rede / Loja</th>
-                    <th style="min-width:180px;">Categoria &amp; Modalidade</th>
-                    <th style="min-width:110px; text-align:center;">Dias / Meta</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${filtrados.length === 0 ? `
-                    <tr>
-                      <td colspan="8" style="text-align:center; padding:30px; color:var(--text-muted);">
-                        Nenhuma solicitação encontrada com os filtros selecionados.
-                      </td>
-                    </tr>
-                  ` : filtrados.map(ch => {
-                    const ev = this.getTicketSlaEvaluation(ch);
-                    const dtCell = (val, color) => val
-                      ? `<span style="font-size:11px; color:${color || 'var(--text-secondary)'}; font-weight:600;">${this.formatDate(val)}</span>`
-                      : `<span style="font-size:11px; color:var(--text-dim); opacity:0.45;">—</span>`;
+            <!-- 2. BARRA DE SEGMENTAÇÃO DINÂMICA (INVESTIDA & TIPO DE COMPRA) -->
+            <div class="dossier-filters-bar">
+              <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+                <div style="display:flex; align-items:center; gap:6px; color:var(--text-primary); font-size:12.5px; font-weight:800;">
+                  <i data-lucide="sliders-horizontal" style="width:15px; height:15px; color:var(--plx-primary);"></i>
+                  <span>Segmentar Performance:</span>
+                </div>
 
-                    // Data de Cotação: exibe se já iniciou cotação
-                    const displayDtCotacao = ch.data_cotacao || (ev.isEmCotacao || ev.isPosCotacao ? ch.data_criacao : null);
-                    // Data de Pedido Enviado: exibe se já concluiu cotação/pedido
-                    const displayDtPedido = ch.data_aprovacao_pedido || (ev.isFinished ? ch.data_aprovacao : null);
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <label for="dossierInvestidaSelect" style="font-size:11px; font-weight:800; text-transform:uppercase; color:var(--text-muted);">🏢 Investida:</label>
+                  <select id="dossierInvestidaSelect" class="select-filter-clean">
+                    <option value="todas" ${this._buyerInvestidaFilter === 'todas' ? 'selected' : ''}>Todas as Lojas (${investidas.length} redes)</option>
+                    ${(data.opcoesFiltros?.investidas || []).filter(i => i !== 'todas').map(inv => `
+                      <option value="${inv}" ${this._buyerInvestidaFilter === inv ? 'selected' : ''}>${inv}</option>
+                    `).join('')}
+                  </select>
+                </div>
 
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <label for="dossierTipoSelect" style="font-size:11px; font-weight:800; text-transform:uppercase; color:var(--text-muted);">📦 Modalidade:</label>
+                  <select id="dossierTipoSelect" class="select-filter-clean">
+                    ${(data.opcoesFiltros?.tiposCompra || []).map(t => `
+                      <option value="${t.id}" ${this._buyerTipoFilter === t.id ? 'selected' : ''}>${t.label}</option>
+                    `).join('')}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                ${hasDossierFilter ? `
+                  <button id="btnResetDossierFilters" class="btn btn-secondary btn-sm" style="font-size:11px; padding:6px 12px; background:rgba(239,68,68,0.08); border-color:rgba(239,68,68,0.25); color:var(--coral); font-weight:800;">
+                    <i data-lucide="rotate-ccw" style="width:12px; height:12px;"></i>
+                    <span>Limpar Filtros (Ver Carteira Consolidada)</span>
+                  </button>
+                ` : `
+                  <span style="font-size:11.5px; color:var(--emerald); font-weight:700; display:flex; align-items:center; gap:5px; background:rgba(16,185,129,0.08); padding:4px 10px; border-radius:6px;">
+                    <i data-lucide="check-circle-2" style="width:13px; height:13px;"></i>
+                    <span>Exibindo Carteira Consolidada</span>
+                  </span>
+                `}
+              </div>
+            </div>
+
+            <!-- 3. OS GRANDES NÚMEROS DO COMPRADOR (6 HERO KPIS EM GRID PERFEITO) -->
+            <div class="dossier-kpis-grid">
+              <!-- KPI 1: Volume Selecionado -->
+              <div class="dossier-kpi-card primary">
+                <div class="dossier-kpi-header">
+                  <span class="dossier-kpi-title">Volume Selecionado</span>
+                  <i data-lucide="layers" class="dossier-kpi-icon" style="color:var(--plx-primary);"></i>
+                </div>
+                <div class="dossier-kpi-number">${Number(r.total_solicitacoes || 0).toLocaleString('pt-BR')}</div>
+                <div class="dossier-kpi-sub">
+                  Spot: <strong>${Number((r.mix?.spotMateriais || 0) + (r.mix?.spotServicos || 0)).toLocaleString('pt-BR')}</strong> · Estrat: <strong>${Number(r.mix?.estrategica || 0).toLocaleString('pt-BR')}</strong>
+                </div>
+              </div>
+
+              <!-- KPI 2: Em Aberto Total -->
+              <div class="dossier-kpi-card amber">
+                <div class="dossier-kpi-header">
+                  <span class="dossier-kpi-title" style="color:var(--amber);">Em Aberto Total</span>
+                  <i data-lucide="clock" class="dossier-kpi-icon" style="color:var(--amber);"></i>
+                </div>
+                <div class="dossier-kpi-number" style="color:var(--amber);">${Number(r.backlog_ativo || 0).toLocaleString('pt-BR')}</div>
+                <div class="dossier-kpi-sub" style="color:var(--text-secondary);">
+                  <strong style="color:var(--emerald);">${Number(r.total_atendidas || 0).toLocaleString('pt-BR')}</strong> finalizadas
+                </div>
+              </div>
+
+              <!-- KPI 3: Aberto no SLA -->
+              <div class="dossier-kpi-card emerald" style="background:rgba(16, 185, 129, 0.04);">
+                <div class="dossier-kpi-header">
+                  <span class="dossier-kpi-title" style="color:var(--emerald);">🟢 Aberto no SLA</span>
+                  <i data-lucide="shield-check" class="dossier-kpi-icon" style="color:var(--emerald);"></i>
+                </div>
+                <div class="dossier-kpi-number" style="color:var(--emerald);">${Number(r.backlog_dentro_sla || 0).toLocaleString('pt-BR')}</div>
+                <div class="dossier-kpi-sub" style="color:var(--text-secondary);">
+                  <strong style="color:var(--emerald);">${r.pct_backlog_dentro_sla || 0}%</strong> da fila ativa
+                </div>
+              </div>
+
+              <!-- KPI 4: Fora do SLA -->
+              <div class="dossier-kpi-card danger" style="background:rgba(239, 68, 68, 0.04);">
+                <div class="dossier-kpi-header">
+                  <span class="dossier-kpi-title" style="color:var(--coral);">🔴 Fora do SLA</span>
+                  <i data-lucide="alert-octagon" class="dossier-kpi-icon" style="color:var(--coral);"></i>
+                </div>
+                <div class="dossier-kpi-number" style="color:var(--coral);">${Number(r.backlog_fora_sla || 0).toLocaleString('pt-BR')}</div>
+                <div class="dossier-kpi-sub" style="color:var(--coral);">
+                  <strong>${r.pct_backlog_fora_sla || 0}%</strong> estourada
+                </div>
+              </div>
+
+              <!-- KPI 5: SLA Médio de Cotação -->
+              <div class="dossier-kpi-card accent">
+                <div class="dossier-kpi-header">
+                  <span class="dossier-kpi-title" style="color:var(--plx-accent);">SLA Médio Cotação</span>
+                  <i data-lucide="timer" class="dossier-kpi-icon" style="color:var(--plx-accent);"></i>
+                </div>
+                <div class="dossier-kpi-number" style="color:var(--plx-accent);">${r.sla_cotacao_medio || 0}<span style="font-size:13px; font-weight:700; color:var(--text-muted); margin-left:3px;">dias</span></div>
+                <div class="dossier-kpi-sub">
+                  Mat: <strong>${r.mix?.spotMateriais || 0}</strong> · Serv: <strong>${r.mix?.spotServicos || 0}</strong>
+                </div>
+              </div>
+
+              <!-- KPI 6: Taxa de Conformidade -->
+              <div class="dossier-kpi-card emerald">
+                <div class="dossier-kpi-header">
+                  <span class="dossier-kpi-title" style="color:var(--emerald);">Taxa Conformidade</span>
+                  <i data-lucide="target" class="dossier-kpi-icon" style="color:var(--emerald);"></i>
+                </div>
+                <div class="dossier-kpi-number" style="color:var(--emerald);">${Math.round(r.taxa_conformidade_pct || 100)}%</div>
+                <div class="dossier-kpi-sub">
+                  <div style="display:flex; justify-content:space-between; margin-bottom:2px; font-size:10.5px;">
+                    <span><strong>${Number(r.dentro_sla_count || 0).toLocaleString('pt-BR')}</strong> no prazo</span>
+                    <span>${Number(r.com_sla || 0).toLocaleString('pt-BR')} total</span>
+                  </div>
+                  <div style="width:100%; height:4px; background:rgba(0,0,0,0.06); border-radius:2px; overflow:hidden;">
+                    <div style="width:${Math.min(100, Math.round(r.taxa_conformidade_pct || 100))}%; height:100%; background:var(--emerald); border-radius:2px;"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 4. PERFORMANCE POR MODALIDADE & PERFORMANCE POR REDE ATENDIDA (INTERATIVAS) -->
+            <div class="dossier-grid-2">
+              <!-- 4.1 Por Modalidade de Compra -->
+              <div class="card" style="padding:16px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                  <div>
+                    <div class="card-title" style="display:flex; align-items:center; gap:6px;">
+                      <span>📦 Performance por Modalidade</span>
+                      <span class="tag-pill" style="font-size:10px; padding:1px 6px;">Clique para filtrar</span>
+                    </div>
+                    <div class="card-subtitle">Volume, prazos e taxa de SLA por tipo de aquisição</div>
+                  </div>
+                </div>
+
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                  ${modalidades.map(m => {
+                    const isSelected = this._buyerTipoFilter === m.tipo_compra;
+                    const metaDias = m.tipo_compra === 'SPOT_MATERIAIS' ? 10 : (m.tipo_compra === 'SPOT_SERVICOS' ? 15 : 45);
+                    const pctConform = Math.round(m.taxa_conformidade_pct || 0);
+                    const isGood = pctConform >= 75;
                     return `
-                      <tr>
-                        <td>
-                          <strong style="color:var(--plx-accent); font-size:12px;">${ch.numero_solicitacao || `#ORG-${ch.id}`}</strong>
-                        </td>
-                        <td>${dtCell(displayDtCotacao, 'var(--text-secondary)')}</td>
-                        <td>${dtCell(displayDtPedido, 'var(--sky)')}</td>
-                        <td>
-                          <span class="sla-badge ${ev.isFinished ? 'fast' : (ev.isEmCotacao ? 'warning' : 'regular')}">
-                            ${ch.status_nome}
-                          </span>
-                        </td>
-                        <td>
-                          ${ch.data_finalizacao
-                            ? `<span style="font-size:11px; color:var(--emerald); font-weight:700;">${this.formatDate(ch.data_finalizacao)}</span>`
-                            : (ev.isFinished ? `<span style="font-size:10.5px; color:var(--emerald); font-weight:700;">Concluído</span>` : (ev.isPreCotacao ? `<span style="font-size:10.5px; color:var(--text-muted); font-weight:600; background:var(--surface-subtle); padding:2px 6px; border-radius:4px;">Pré-Cotação</span>` : `<span style="font-size:10.5px; color:var(--amber); font-weight:700; background:rgba(245,158,11,0.12); padding:2px 6px; border-radius:4px;">Em aberto</span>`))}
-                        </td>
-                        <td>
-                          <strong style="color:var(--text-primary); font-size:12px;">${ch.investida_nome}</strong>
-                        </td>
-                        <td>
-                          <div style="font-weight:700; color:var(--text-primary); font-size:12px;">${ch.categoria}</div>
-                          <div style="font-size:10px; color:var(--text-muted); margin-top:1px;">
-                            ${ch.modalidade_compra || 'Spot'} · <span style="color:var(--text-secondary);">Meta: ${ev.meta}d</span>
+                      <div class="dossier-modalidade-card ${isSelected ? 'active' : ''}" data-tipo="${m.tipo_compra}">
+                        <div style="display:flex; align-items:center; justify-content:space-between;">
+                          <div style="display:flex; align-items:center; gap:8px;">
+                            <span style="font-weight:800; color:var(--text-primary); font-size:13px;">${m.modalidade}</span>
+                            <span class="tag-pill" style="font-size:10px; font-weight:800; padding:1px 6px; background:rgba(0,0,0,0.05);">Meta: ${metaDias}d</span>
                           </div>
-                        </td>
-                        <td class="center">
-                          ${ev.badgeHtml}
-                        </td>
-                      </tr>
+                          <div style="display:flex; align-items:baseline; gap:4px;">
+                            <span style="font-size:14px; font-weight:900; color:${m.sla_medio <= metaDias ? 'var(--emerald)' : 'var(--coral)'};">${m.sla_medio}d</span>
+                            <span style="font-size:10px; color:var(--text-muted);">médio</span>
+                          </div>
+                        </div>
+
+                        <!-- Barra de SLA -->
+                        <div style="display:flex; align-items:center; gap:8px;">
+                          <div style="flex:1; height:6px; background:rgba(0,0,0,0.06); border-radius:3px; overflow:hidden;">
+                            <div style="width:${Math.min(100, pctConform)}%; height:100%; background:${isGood ? 'var(--emerald)' : (pctConform >= 50 ? 'var(--amber)' : 'var(--coral)')}; border-radius:3px;"></div>
+                          </div>
+                          <span style="font-size:11px; font-weight:800; color:${isGood ? 'var(--emerald)' : (pctConform >= 50 ? 'var(--amber)' : 'var(--coral)')}; min-width:48px; text-align:right;">
+                            ${pctConform}% SLA
+                          </span>
+                        </div>
+
+                        <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--text-muted);">
+                          <span>Total: <strong>${Number(m.total).toLocaleString('pt-BR')}</strong> · Concluídas: <strong>${Number(m.concluidas).toLocaleString('pt-BR')}</strong></span>
+                          <span style="color:${m.backlog > 0 ? 'var(--amber)' : 'var(--emerald)'}; font-weight:700;">
+                            ${m.backlog > 0 ? `⏳ ${m.backlog} em aberto` : '✅ Zerado'}
+                          </span>
+                        </div>
+                      </div>
                     `;
                   }).join('')}
-                </tbody>
-              </table>
+                </div>
+              </div>
+
+              <!-- 4.2 Por Rede Atendida -->
+              <div class="card" style="padding:16px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                  <div>
+                    <div class="card-title" style="display:flex; align-items:center; gap:6px;">
+                      <span>🏢 Performance por Rede Atendida</span>
+                      <span class="tag-pill" style="font-size:10px; padding:1px 6px;">Clique para filtrar</span>
+                    </div>
+                    <div class="card-subtitle">Distribuição da demanda e prazos por loja da carteira</div>
+                  </div>
+                  <span style="font-size:11px; font-weight:800; color:var(--text-muted);">${investidas.length} redes</span>
+                </div>
+
+                <div class="dossier-stores-grid">
+                  ${investidas.map(inv => {
+                    const isSelected = this._buyerInvestidaFilter === inv.investida;
+                    const isSlow = inv.alerta === 'Gargalo Crítico nesta Investida' || inv.sla_cotacao_medio > 15;
+                    const pctSla = Math.round(inv.taxa_conformidade_pct || 0);
+                    return `
+                      <div class="dossier-store-card btn-filter-store ${isSelected ? 'active' : ''}" data-investida="${inv.investida}" style="border-top:3px solid ${isSlow ? 'var(--coral)' : 'var(--emerald)'};">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                          <div class="dossier-store-name" style="font-size:12.5px; font-weight:800;">${inv.investida}</div>
+                          <span class="sla-badge ${isSlow ? 'slow' : 'fast'}" style="font-size:10px; padding:1px 6px;">
+                            ${inv.sla_cotacao_medio}d
+                          </span>
+                        </div>
+                        <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px;">
+                          Vol: <strong>${Number(inv.total_solicitacoes).toLocaleString('pt-BR')}</strong> · Aberto: <strong style="color:${inv.backlog_ativo > 0 ? 'var(--amber)' : 'inherit'};">${Number(inv.backlog_ativo).toLocaleString('pt-BR')}</strong>
+                        </div>
+                        <div style="display:flex; align-items:center; justify-content:space-between; font-size:10.5px; font-weight:800; color:${pctSla >= 75 ? 'var(--emerald)' : 'var(--coral)'};">
+                          <span>${pctSla}% no SLA</span>
+                          <span style="font-size:10px; color:var(--text-muted); font-weight:600;">${inv.dentro_sla_count}/${inv.com_sla}</span>
+                        </div>
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
             </div>
+
+            <!-- 5. FILA E HISTÓRICO COMPLETO DE SOLICITAÇÕES (TABELA AMPLA COM BUSCA E FILTROS) -->
+            <div class="dossier-table-panel">
+              <div class="dossier-table-toolbar">
+                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                  <div class="search-input-clean">
+                    <i data-lucide="search" style="width:13px; height:13px; color:var(--text-muted);"></i>
+                    <input type="text" id="buyerDossierSearch" placeholder="Buscar por número, loja ou categoria..." value="${this._buyerSearchQuery}">
+                  </div>
+
+                  <div style="display:flex; gap:4px; flex-wrap:wrap;">
+                    <button class="btn-filter-tag ${this._buyerFilterStatus === 'todos' ? 'active' : ''}" data-filter="todos">Todas (${chamados.length})</button>
+                    <button class="btn-filter-tag ${this._buyerFilterStatus === 'cotacao' ? 'active' : ''}" data-filter="cotacao">Em Cotação</button>
+                    <button class="btn-filter-tag ${this._buyerFilterStatus === 'aprovacao' ? 'active' : ''}" data-filter="aprovacao">Em Aprovação</button>
+                    <button class="btn-filter-tag ${this._buyerFilterStatus === 'atrasados' ? 'active' : ''}" data-filter="atrasados" style="color:var(--coral);">⚠️ Estourou SLA</button>
+                    <button class="btn-filter-tag ${this._buyerFilterStatus === 'concluidos' ? 'active' : ''}" data-filter="concluidos">Concluídas</button>
+                  </div>
+                </div>
+
+                <span style="font-size:11.5px; color:var(--text-muted);">
+                  Exibindo <strong>${filtrados.length}</strong> de ${chamados.length} solicitações
+                </span>
+              </div>
+
+              <div style="overflow-x: auto;">
+                <table class="data-table" style="min-width: 1100px;">
+                  <thead>
+                    <tr>
+                      <th style="min-width:130px;">Solicitação</th>
+                      <th style="min-width:110px;">Data Cotação</th>
+                      <th style="min-width:110px;">Pedido Enviado</th>
+                      <th style="min-width:110px;">Etapa Atual</th>
+                      <th style="min-width:110px;">Finalização</th>
+                      <th style="min-width:130px;">Rede / Loja</th>
+                      <th style="min-width:180px;">Categoria &amp; Modalidade</th>
+                      <th style="min-width:110px; text-align:center;">Dias / Meta</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${filtrados.length === 0 ? `
+                      <tr>
+                        <td colspan="8" style="text-align:center; padding:30px; color:var(--text-muted);">
+                          Nenhuma solicitação encontrada com os filtros selecionados.
+                        </td>
+                      </tr>
+                    ` : filtrados.map(ch => {
+                      const ev = this.getTicketSlaEvaluation(ch);
+                      const dtCell = (val, color) => val
+                        ? `<span style="font-size:11px; color:${color || 'var(--text-secondary)'}; font-weight:600;">${this.formatDate(val)}</span>`
+                        : `<span style="font-size:11px; color:var(--text-dim); opacity:0.45;">—</span>`;
+
+                      // Data de Cotação: exibe se já iniciou cotação
+                      const displayDtCotacao = ch.data_cotacao || (ev.isEmCotacao || ev.isPosCotacao ? ch.data_criacao : null);
+                      // Data de Pedido Enviado: exibe se já concluiu cotação/pedido
+                      const displayDtPedido = ch.data_aprovacao_pedido || (ev.isFinished ? ch.data_aprovacao : null);
+
+                      return `
+                        <tr class="clickable-solicitation-row" data-id="${ch.id}" style="cursor:pointer;">
+                          <td>
+                            <strong style="color:var(--plx-accent); font-size:12px;">${ch.numero_solicitacao || `#ORG-${ch.id}`}</strong>
+                          </td>
+                          <td>${dtCell(displayDtCotacao, 'var(--text-secondary)')}</td>
+                          <td>${dtCell(displayDtPedido, 'var(--sky)')}</td>
+                          <td>
+                            <span class="sla-badge ${ev.isFinished ? 'fast' : (ev.isEmCotacao ? 'warning' : 'regular')}">
+                              ${ch.status_nome}
+                            </span>
+                          </td>
+                          <td>
+                            ${ch.data_finalizacao
+                              ? `<span style="font-size:11px; color:var(--emerald); font-weight:700;">${this.formatDate(ch.data_finalizacao)}</span>`
+                              : (ev.isFinished ? `<span style="font-size:10.5px; color:var(--emerald); font-weight:700;">Concluído</span>` : (ev.isPreCotacao ? `<span style="font-size:10.5px; color:var(--text-muted); font-weight:600; background:var(--surface-subtle); padding:2px 6px; border-radius:4px;">Pré-Cotação</span>` : `<span style="font-size:10.5px; color:var(--amber); font-weight:700; background:rgba(245,158,11,0.12); padding:2px 6px; border-radius:4px;">Em aberto</span>`))}
+                          </td>
+                          <td>
+                            <strong style="color:var(--text-primary); font-size:12px;">${ch.investida_nome}</strong>
+                          </td>
+                          <td>
+                            <div style="font-weight:700; color:var(--text-primary); font-size:12px;">${ch.categoria}</div>
+                            <div style="font-size:10px; color:var(--text-muted); margin-top:1px;">
+                              ${ch.modalidade_compra || 'Spot'} · <span style="color:var(--text-secondary);">Meta: ${ev.meta}d</span>
+                            </div>
+                          </td>
+                          <td class="center">
+                            ${ev.badgeHtml}
+                          </td>
+                        </tr>
+                      `;
+                    }).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          `;
+
+          // Eventos do Dossiê
+          const backBtn = document.getElementById('btnBackFromBuyerDetail');
+          if (backBtn) {
+            backBtn.addEventListener('click', () => {
+              const targetTab = this.state.returnTab || 'compradores';
+              this.switchTab(targetTab);
+            });
+          }
+
+          const selInvDossier = document.getElementById('dossierInvestidaSelect');
+          if (selInvDossier) {
+            selInvDossier.addEventListener('change', (e) => {
+              this._buyerInvestidaFilter = e.target.value;
+              loadDossierData();
+            });
+          }
+
+          const selTipoDossier = document.getElementById('dossierTipoSelect');
+          if (selTipoDossier) {
+            selTipoDossier.addEventListener('change', (e) => {
+              this._buyerTipoFilter = e.target.value;
+              loadDossierData();
+            });
+          }
+
+          const btnResetDossier = document.getElementById('btnResetDossierFilters');
+          if (btnResetDossier) {
+            btnResetDossier.addEventListener('click', () => {
+              this._buyerInvestidaFilter = 'todas';
+              this._buyerTipoFilter = 'todos';
+              loadDossierData();
+            });
+          }
+
+          // Clique nos cards de modalidade
+          container.querySelectorAll('.dossier-modalidade-card').forEach(card => {
+            card.addEventListener('click', () => {
+              const tipo = card.dataset.tipo;
+              this._buyerTipoFilter = this._buyerTipoFilter === tipo ? 'todos' : tipo;
+              loadDossierData();
+            });
+          });
+
+          // Clique nos cards de lojas
+          container.querySelectorAll('.btn-filter-store').forEach(card => {
+            card.addEventListener('click', () => {
+              const inv = card.dataset.investida;
+              this._buyerInvestidaFilter = this._buyerInvestidaFilter === inv ? 'todas' : inv;
+              loadDossierData();
+            });
+          });
+
+          const searchInp = document.getElementById('buyerDossierSearch');
+          if (searchInp) {
+            searchInp.addEventListener('input', (e) => {
+              this._buyerSearchQuery = e.target.value;
+              renderDossier();
+              const inp = document.getElementById('buyerDossierSearch');
+              if (inp) {
+                inp.focus();
+                inp.setSelectionRange(inp.value.length, inp.value.length);
+              }
+            });
+          }
+
+          container.querySelectorAll('.dossier-table-toolbar .btn-filter-tag').forEach(btn => {
+            btn.addEventListener('click', () => {
+              this._buyerFilterStatus = btn.dataset.filter;
+              renderDossier();
+            });
+          });
+
+          container.querySelectorAll('.clickable-solicitation-row').forEach(row => {
+            row.addEventListener('click', () => {
+              const id = row.dataset.id;
+              const ch = chamados.find(c => String(c.id) === String(id));
+              if (ch) this.openSolicitationTimeline(ch);
+            });
+          });
+
+          if (window.lucide) window.lucide.createIcons();
+        };
+
+        renderDossier();
+      } catch (err) {
+        container.innerHTML = `
+          <div style="padding:40px; text-align:center; color:var(--coral);">
+            <i data-lucide="alert-triangle" style="width:32px; height:32px; margin-bottom:10px;"></i>
+            <div style="font-weight:800; font-size:15px;">Não foi possível carregar o Raio-X do Comprador</div>
+            <div style="font-size:12px; color:var(--text-muted); margin:6px 0 16px;">${err.message}</div>
+            <button class="btn btn-secondary btn-sm" id="btnRetryBuyer">Tentar Novamente</button>
           </div>
         `;
-
-        // Eventos
-        const backBtn = document.getElementById('btnBackFromBuyerDetail');
-        if (backBtn) {
-          backBtn.addEventListener('click', () => {
-            const targetTab = this.state.returnTab || 'compradores';
-            this.switchTab(targetTab);
-          });
-        }
-
-        const searchInp = document.getElementById('buyerDossierSearch');
-        if (searchInp) {
-          searchInp.addEventListener('input', (e) => {
-            this._buyerSearchQuery = e.target.value;
-            renderDossier();
-            const inp = document.getElementById('buyerDossierSearch');
-            if (inp) {
-              inp.focus();
-              inp.setSelectionRange(inp.value.length, inp.value.length);
-            }
-          });
-        }
-
-        container.querySelectorAll('.btn-filter-tag').forEach(btn => {
-          btn.addEventListener('click', () => {
-            this._buyerFilterStatus = btn.dataset.filter;
-            renderDossier();
-          });
-        });
-
-        // Clique para abrir Linha do Tempo / Rastreabilidade
-        container.querySelectorAll('.clickable-solic-row').forEach(row => {
-          row.addEventListener('click', () => {
-            const solicId = row.dataset.solicId;
-            const found = chamados.find(c => String(c.id) === String(solicId));
-            this.openSolicitationTimeline(found || solicId);
-          });
-        });
-
+        const retryBtn = document.getElementById('btnRetryBuyer');
+        if (retryBtn) retryBtn.addEventListener('click', () => this.openBuyerDetail(compradorName));
         if (window.lucide) window.lucide.createIcons();
-      };
-
-      renderDossier();
-
-    } catch (err) {
-      container.innerHTML = `
-        <div style="padding:40px; text-align:center;">
-          <div style="color:var(--coral); font-weight:800; margin-bottom:12px;">Erro ao carregar Raio-X: ${err.message}</div>
-          <button class="dossier-back-btn" id="btnBackError">
-            <i data-lucide="arrow-left" style="width:14px; height:14px;"></i>
-            <span>Voltar para Compradores</span>
-          </button>
-        </div>
-      `;
-      const btnBack = document.getElementById('btnBackError');
-      if (btnBack) {
-        btnBack.addEventListener('click', () => this.switchTab(this.state.returnTab || 'compradores'));
       }
-      if (window.lucide) window.lucide.createIcons();
-    }
+    };
+
+    loadDossierData();
   }
 
   // =====================================================================
@@ -1570,7 +1938,7 @@ class PlurixApp {
 
       <div class="table-panel">
         <div class="table-toolbar">
-          <div style="font-size:13.5px; font-weight:800; color:var(--text-primary);">Fila Prioritária de Chamados (Mais Antigos)</div>
+          <div style="font-size:13.5px; font-weight:800; color:var(--text-primary);">Fila Prioritária de Requisições (Mais Antigas)</div>
           <span class="sla-badge warning">Atenção Gerencial</span>
         </div>
 
@@ -1619,12 +1987,62 @@ class PlurixApp {
   }
 
   // =====================================================================
-  // 4. RENDER: INVESTIDAS (REDES)
+  // 4. RENDER: INVESTIDAS & CATEGORIAS (UNIFICADA)
   // =====================================================================
-  renderInvestidas() {
-    const container = document.getElementById('investidasContent');
+  renderInvestidasCategorias() {
+    const container = document.getElementById('investidasCategoriasContent');
     if (!container) return;
 
+    const subTab = this.state.investidasCatSubTab || 'investidas';
+
+    container.innerHTML = `
+      <!-- CONTROLE DE SUB-ABAS / VISÃO UNIFICADA -->
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; flex-wrap:wrap; gap:12px;">
+        <div class="segmented-toggle" style="background:var(--surface-card); padding:4px; border:1px solid var(--border-subtle); border-radius:8px;">
+          <button class="toggle-btn btn-subtab-invcat ${subTab === 'investidas' ? 'active' : ''}" data-subtab="investidas" style="font-size:12px; padding:6px 16px; display:flex; align-items:center; gap:6px;">
+            <i data-lucide="building-2" style="width:14px; height:14px;"></i>
+            <span>Redes Investidas (Lojas)</span>
+          </button>
+          <button class="toggle-btn btn-subtab-invcat ${subTab === 'categorias' ? 'active' : ''}" data-subtab="categorias" style="font-size:12px; padding:6px 16px; display:flex; align-items:center; gap:6px;">
+            <i data-lucide="package" style="width:14px; height:14px;"></i>
+            <span>Categorias de Compras</span>
+          </button>
+        </div>
+
+        <div style="font-size:12px; color:var(--text-muted);">
+          ${subTab === 'investidas' 
+            ? 'Acompanhamento consolidado por bandeira/loja' 
+            : 'Performance vs metas oficiais por segmento de compra'}
+        </div>
+      </div>
+
+      <div id="invCatSubContent"></div>
+    `;
+
+    const subContent = document.getElementById('invCatSubContent');
+    if (subTab === 'investidas') {
+      this.renderInvestidasSub(subContent);
+    } else {
+      this.renderCategoriasSub(subContent);
+    }
+
+    container.querySelectorAll('.btn-subtab-invcat').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.state.investidasCatSubTab = btn.dataset.subtab;
+        this.renderInvestidasCategorias();
+      });
+    });
+
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  renderInvestidas() {
+    this.state.investidasCatSubTab = 'investidas';
+    this.renderInvestidasCategorias();
+  }
+
+  renderInvestidasSub(container) {
+    if (!container) return;
     const data = this.state.data.investidas;
     if (!data) return;
 
@@ -1716,7 +2134,7 @@ class PlurixApp {
   }
 
   // =====================================================================
-  // 🏢 MODAL: DRILLDOWN DA INVESTIDA
+  // 🏢 MODAL: DRILLDOWN DA INVESTIDA (RAIO-X + BACKLOG DE REQUISIÇÕES)
   // =====================================================================
   async openInvestidaDetailModal(investidaName) {
     const modal = document.getElementById('investidaDetailModal');
@@ -1727,9 +2145,10 @@ class PlurixApp {
     if (!modal || !bodyElem) return;
 
     nameElem.textContent = investidaName;
-    metaElem.textContent = 'Carregando dados da rede...';
-    bodyElem.innerHTML = '<div style="padding:30px; text-align:center; color:var(--text-muted);">Consultando...</div>';
+    metaElem.textContent = 'Carregando dados e backlog da rede...';
+    bodyElem.innerHTML = '<div style="padding:40px; text-align:center; color:var(--text-muted);"><i data-lucide="loader" style="width:24px; height:24px; animation:spin 1s linear infinite;"></i><div style="margin-top:8px;">Consultando requisições da unidade...</div></div>';
     modal.classList.add('active');
+    if (window.lucide) window.lucide.createIcons();
 
     try {
       const { mode, month, year } = this.state;
@@ -1738,42 +2157,135 @@ class PlurixApp {
 
       const r = data.resumo || {};
       const compradores = data.compradores || [];
+      const chamados = data.chamados || [];
 
-      metaElem.textContent = `${data.periodo} · ${r.total_solicitacoes || 0} solicitações · SLA: ${r.sla_cotacao_medio || 0} dias`;
+      metaElem.textContent = `${data.periodo} · ${r.total_solicitacoes || 0} solicitações totais · ${chamados.length} requisições em cotação`;
 
       bodyElem.innerHTML = `
-        <div style="font-size:13px; font-weight:800; color:var(--text-primary); margin-bottom:8px;">
-          Compradores Atuando nesta Unidade (${compradores.length})
+        <!-- 1. CARDS DE RESUMO DA REDE -->
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:10px; margin-bottom:18px;">
+          <div style="background:var(--surface-subtle); padding:10px 14px; border-radius:8px; border:1px solid var(--border-subtle);">
+            <div style="font-size:10.5px; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Volume Total</div>
+            <div style="font-size:20px; font-weight:900; color:var(--text-primary); margin-top:2px;">${Number(r.total_solicitacoes || 0).toLocaleString('pt-BR')}</div>
+          </div>
+          <div style="background:var(--surface-subtle); padding:10px 14px; border-radius:8px; border:1px solid var(--border-subtle);">
+            <div style="font-size:10.5px; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Em Cotação</div>
+            <div style="font-size:20px; font-weight:900; color:var(--amber); margin-top:2px;">${Number(r.backlog_ativo || 0).toLocaleString('pt-BR')}</div>
+          </div>
+          <div style="background:var(--surface-subtle); padding:10px 14px; border-radius:8px; border:1px solid var(--border-subtle);">
+            <div style="font-size:10.5px; color:var(--text-muted); font-weight:700; text-transform:uppercase;">SLA Cotação</div>
+            <div style="font-size:20px; font-weight:900; color:var(--plx-accent); margin-top:2px;">${r.sla_cotacao_medio || 0}d</div>
+          </div>
+          <div style="background:var(--surface-subtle); padding:10px 14px; border-radius:8px; border:1px solid var(--border-subtle);">
+            <div style="font-size:10.5px; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Conformidade</div>
+            <div style="font-size:20px; font-weight:900; color:${(r.taxa_conformidade_pct || 0) >= 85 ? 'var(--emerald)' : 'var(--coral)'}; margin-top:2px;">${r.taxa_conformidade_pct || 0}%</div>
+          </div>
         </div>
 
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Comprador</th>
-              <th style="text-align:center;">Volume</th>
-              <th style="text-align:center;">Em Aberto</th>
-              <th style="text-align:center;">SLA Cotação</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${compradores.map(c => `
-              <tr>
-                <td>
-                  <strong>${c.comprador}</strong>
-                  <div style="font-size:10px; color:var(--text-muted);">Mat: ${c.qtd_spot_mat || 0} · Serv: ${c.qtd_spot_serv || 0} · Estrat: ${c.qtd_estrategica || 0}</div>
-                </td>
-                <td class="center">${Number(c.total_solicitacoes).toLocaleString('pt-BR')}</td>
-                <td class="center"><strong style="color:var(--amber);">${c.backlog_ativo}</strong></td>
-                <td class="center">${this.getSlaBadge(c.sla_cotacao_medio)}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
+        <!-- 2. TABELA DE BACKLOG DE REQUISIÇÕES EM COTAÇÃO DA INVESTIDA -->
+        <div class="table-panel" style="margin-bottom:18px;">
+          <div class="table-toolbar" style="padding:10px 14px;">
+            <div>
+              <div style="font-size:13px; font-weight:800; color:var(--text-primary);">⚡ Backlog de Requisições em Cotação (${chamados.length})</div>
+              <div style="font-size:10.5px; color:var(--text-muted);">Clique em uma linha para abrir a Linha do Tempo e rastreabilidade</div>
+            </div>
+          </div>
+
+          <div style="max-height: 280px; overflow-y: auto;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Solicitação</th>
+                  <th>Início Cotação</th>
+                  <th>Categoria</th>
+                  <th>Comprador</th>
+                  <th>Modalidade</th>
+                  <th style="text-align:center;">Aging / Meta</th>
+                  <th>Urgência SLA</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${chamados.length === 0 ? `
+                  <tr>
+                    <td colspan="7" style="text-align:center; padding:24px; color:var(--text-muted);">
+                      Nenhuma requisição em aberto para esta investida.
+                    </td>
+                  </tr>
+                ` : chamados.map(c => {
+                  const isVencido = c.dias_restantes < 0;
+                  return `
+                    <tr class="clickable-inv-solic-row" data-solic-id="${c.id}" style="cursor:pointer;" title="Clique para abrir rastreabilidade">
+                      <td><strong style="color:var(--plx-accent); font-size:11.5px;">${c.numero_solicitacao || `#ORG-${c.id}`}</strong></td>
+                      <td><span style="font-size:10.5px; color:var(--text-secondary); font-weight:600;">${this.formatDate(c.data_cotacao || c.data_criacao)}</span></td>
+                      <td><span style="font-size:11px; font-weight:600; color:var(--text-primary);">${c.categoria}</span></td>
+                      <td><span style="font-size:11px; font-weight:600; color:var(--text-primary);">${c.comprador || '<span style="color:var(--text-dim);">Não Atribuído</span>'}</span></td>
+                      <td><span class="tag-pill" style="font-size:9.5px; padding:1px 5px;">${c.modalidade_compra}</span></td>
+                      <td class="center">
+                        <strong style="font-size:12px; color:${isVencido ? 'var(--coral)' : 'var(--emerald)'};">${Math.round(c.aging_dias)}d</strong>
+                        <span style="font-size:9.5px; color:var(--text-muted);">/ ${c.meta_sla_dias}d</span>
+                      </td>
+                      <td><span class="pulse-badge ${c.nivel_urgencia}" style="font-size:10px;">${c.label_urgencia}</span></td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 3. COMPRADORES ATUANDO NA UNIDADE -->
+        <div class="table-panel">
+          <div class="table-toolbar" style="padding:10px 14px;">
+            <div style="font-size:13px; font-weight:800; color:var(--text-primary);">👤 Compradores Atuando nesta Unidade (${compradores.length})</div>
+          </div>
+
+          <div style="max-height: 220px; overflow-y: auto;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Comprador</th>
+                  <th style="text-align:center;">Volume Total</th>
+                  <th style="text-align:center;">Em Aberto</th>
+                  <th style="text-align:center;">SLA Cotação</th>
+                  <th style="text-align:center;">% no Prazo</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${compradores.map(c => `
+                  <tr>
+                    <td>
+                      <strong style="font-size:12px;">${c.comprador}</strong>
+                      <div style="font-size:10px; color:var(--text-muted);">Mat: ${c.qtd_spot_mat || 0} · Serv: ${c.qtd_spot_serv || 0} · Estrat: ${c.qtd_estrategica || 0}</div>
+                    </td>
+                    <td class="center">${Number(c.total_solicitacoes).toLocaleString('pt-BR')}</td>
+                    <td class="center"><strong style="color:var(--amber);">${c.backlog_ativo}</strong></td>
+                    <td class="center">${this.getSlaBadge(c.sla_cotacao_medio)}</td>
+                    <td class="center">
+                      <span class="sla-badge ${(c.taxa_conformidade_pct || 0) >= 85 ? 'fast' : 'warning'}">
+                        ${Math.round(c.taxa_conformidade_pct || 0)}%
+                      </span>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
       `;
 
       if (window.lucide) window.lucide.createIcons();
+
+      // Listener para abrir timeline da solicitação a partir do backlog da investida
+      bodyElem.querySelectorAll('.clickable-inv-solic-row').forEach(row => {
+        row.addEventListener('click', () => {
+          const solicId = row.dataset.solicId;
+          const found = chamados.find(c => String(c.id) === String(solicId));
+          this.openSolicitationTimeline(found || solicId);
+        });
+      });
+
     } catch (err) {
-      bodyElem.innerHTML = `<div style="padding:20px; text-align:center; color:var(--coral);">Erro: ${err.message}</div>`;
+      bodyElem.innerHTML = `<div style="padding:20px; text-align:center; color:var(--coral);">Erro ao carregar dados: ${err.message}</div>`;
     }
   }
 
@@ -2157,9 +2669,12 @@ class PlurixApp {
   // 5. RENDER: CATEGORIAS COM SLAS OFICIAIS DA PLURIX
   // =====================================================================
   renderCategorias() {
-    const container = document.getElementById('categoriasContent');
-    if (!container) return;
+    this.state.investidasCatSubTab = 'categorias';
+    this.renderInvestidasCategorias();
+  }
 
+  renderCategoriasSub(container) {
+    if (!container) return;
     const data = this.state.data.categorias;
     if (!data) return;
 
@@ -2256,7 +2771,7 @@ class PlurixApp {
                   <td class="center">
                     <button class="btn btn-primary btn-sm btn-open-category" data-categoria="${c.categoria}">
                       <i data-lucide="eye" style="width:11px; height:11px;"></i>
-                      <span>Chamados</span>
+                      <span>Requisições</span>
                     </button>
                   </td>
                 </tr>
@@ -2277,7 +2792,7 @@ class PlurixApp {
     container.querySelectorAll('.btn-filter-tag').forEach(btn => {
       btn.addEventListener('click', () => {
         this.state.categoriaSort = btn.dataset.catsort;
-        this.fetchRemoteData().then(() => this.renderCategorias());
+        this.fetchRemoteData().then(() => this.renderInvestidasCategorias());
       });
     });
   }
@@ -2399,10 +2914,15 @@ class PlurixApp {
                 const maxRisco = Math.max(...topStores.map(x => x.totalRisco || 1), 1);
                 const pctBar = Math.round(((s.totalRisco || 0) / maxRisco) * 100);
                 return `
-                  <div style="background:var(--surface-subtle); padding:8px 12px; border-radius:6px;">
+                  <div class="radar-ranking-item btn-risk-store" data-store="${s.investida}" style="cursor:pointer;" title="Clique para abrir o backlog de requisições críticas de ${s.investida}">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                      <strong style="font-size:12px; color:var(--text-primary);">${s.investida}</strong>
-                      <span class="pulse-badge vencido" style="font-size:10px; padding:1px 6px;">${s.totalRisco} chamados</span>
+                      <div style="display:flex; align-items:center; gap:8px;">
+                        <div class="buyer-avatar" style="width:24px; height:24px; font-size:10px; border-radius:5px; background:var(--plx-accent); color:#fff; display:flex; align-items:center; justify-content:center;">
+                          <i data-lucide="store" style="width:12px; height:12px;"></i>
+                        </div>
+                        <strong style="font-size:12px; color:var(--text-primary);">${s.investida}</strong>
+                      </div>
+                      <span class="pulse-badge vencido" style="font-size:10px; padding:1px 6px;">${s.totalRisco} requisições</span>
                     </div>
                     <div style="background:rgba(255,255,255,0.06); height:4px; border-radius:2px; overflow:hidden;">
                       <div style="width:${pctBar}%; background:var(--coral); height:100%;"></div>
@@ -2418,7 +2938,7 @@ class PlurixApp {
         <div class="table-panel">
           <div class="table-toolbar">
             <div>
-              <div style="font-size:13.5px; font-weight:800; color:var(--text-primary);">Radar de Chamados em Cotação (${chamados.length})</div>
+              <div style="font-size:13.5px; font-weight:800; color:var(--text-primary);">Radar de Requisições em Cotação (${chamados.length})</div>
               <div style="font-size:11px; color:var(--text-muted);">Solicitações ativas ordenadas pela urgência de atendimento</div>
             </div>
 
@@ -2455,7 +2975,7 @@ class PlurixApp {
                 ${chamados.length === 0 ? `
                   <tr>
                     <td colspan="7" style="text-align:center; padding:32px; color:var(--text-muted);">
-                      Nenhum chamado encontrado para o filtro selecionado.
+                      Nenhuma requisição encontrada para o filtro selecionado.
                     </td>
                   </tr>
                 ` : chamados.map(c => {
@@ -2529,6 +3049,14 @@ class PlurixApp {
         btn.addEventListener('click', () => {
           const bName = btn.dataset.buyer;
           if (bName && bName !== 'Não Atribuído') this.openBuyerDetail(bName);
+        });
+      });
+
+      // Listeners das Redes Investidas em Risco (Abre Backlog Crítico da Rede)
+      container.querySelectorAll('.btn-risk-store').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const storeName = btn.dataset.store;
+          if (storeName) this.openInvestidaDetailModal(storeName);
         });
       });
 

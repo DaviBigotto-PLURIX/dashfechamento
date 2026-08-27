@@ -7,3 +7,5 @@ procurement_plurix.db
 *-shm
 *-wal
 .DS_Store
+scratch_*.js
+scratch/

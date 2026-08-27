@@ -93,7 +93,7 @@ class ReconciliationService {
             null,
             rawCode,
             'SOMENTE_FECHAMENTO',
-            `Código "${rawCode}" não localizado na base operacional de chamados do Organizer.`,
+            `Código "${rawCode}" não localizado na base operacional de requisições do Organizer.`,
             'PENDENTE'
           );
           stats.somenteFechamento++;

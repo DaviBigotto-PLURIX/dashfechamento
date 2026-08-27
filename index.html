@@ -56,14 +56,9 @@
         <span>Workflow</span>
       </button>
 
-      <button class="nav-item tab-link" data-tab="investidas" title="Investidas">
+      <button class="nav-item tab-link" data-tab="investidasCategorias" title="Investidas &amp; Categorias">
         <i data-lucide="building-2"></i>
-        <span>Investidas</span>
-      </button>
-
-      <button class="nav-item tab-link" data-tab="categorias" title="Categorias">
-        <i data-lucide="package"></i>
-        <span>Categorias</span>
+        <span>Investidas &amp; Categorias</span>
       </button>
 
       <button class="nav-item tab-link" data-tab="alertasSla" title="Alertas SLA">
@@ -147,17 +142,12 @@
         <div id="workflowContent"></div>
       </section>
 
-      <!-- ABA 4: INVESTIDAS (REDES) -->
-      <section id="investidas" class="section-pane">
-        <div id="investidasContent"></div>
+      <!-- ABA 4: INVESTIDAS & CATEGORIAS (UNIFICADA) -->
+      <section id="investidasCategorias" class="section-pane">
+        <div id="investidasCategoriasContent"></div>
       </section>
 
-      <!-- ABA 5: CATEGORIAS DE COMPRAS -->
-      <section id="categorias" class="section-pane">
-        <div id="categoriasContent"></div>
-      </section>
-
-      <!-- ABA 6: ALERTAS SLA (RADAR DE URGÊNCIA) -->
+      <!-- ABA 5: ALERTAS SLA (RADAR DE URGÊNCIA) -->
       <section id="alertasSla" class="section-pane">
         <div id="alertasSlaContent"></div>
       </section>
@@ -188,9 +178,9 @@
         <i data-lucide="git-branch"></i>
         <span>Workflow</span>
       </button>
-      <button class="mobile-nav-btn tab-link" data-tab="investidas">
+      <button class="mobile-nav-btn tab-link" data-tab="investidasCategorias">
         <i data-lucide="building-2"></i>
-        <span>Investidas</span>
+        <span>Investidas &amp; Cat.</span>
       </button>
       <button class="mobile-nav-btn tab-link" data-tab="alertasSla">
         <i data-lucide="bell-ring"></i>
@@ -252,7 +242,7 @@
      MODAL: RAIO-X DA INVESTIDA (LOJA / REDE)
      ===================================================================== -->
 <div class="modal-backdrop" id="investidaDetailModal">
-  <div class="modal-dialog">
+  <div class="modal-dialog modal-dialog-large" style="max-width: 860px;">
     <div class="modal-title-bar">
       <div style="display:flex; align-items:center; gap:12px;">
         <div class="buyer-avatar" style="background:var(--plx-accent);"><i data-lucide="store" style="width:16px; height:16px;"></i></div>
@@ -263,7 +253,7 @@
       </div>
       <button class="btn-close" id="btnCloseInvestidaModal"><i data-lucide="x"></i></button>
     </div>
-    <div class="modal-body" id="investidaModalBody">
+    <div class="modal-body" id="investidaModalBody" style="max-height: calc(85vh - 100px); overflow-y: auto;">
       <!-- Injetado dinamicamente via JS -->
     </div>
   </div>
@@ -279,7 +269,7 @@
         <div class="buyer-avatar" style="background:var(--emerald);"><i data-lucide="package" style="width:16px; height:16px;"></i></div>
         <div>
           <h2 id="modalCategoryName" style="margin:0; font-size:16px;">Categoria</h2>
-          <div id="modalCategoryMeta" style="font-size:11.5px; color:var(--text-muted);">Chamados, datas de criação e finalização</div>
+          <div id="modalCategoryMeta" style="font-size:11.5px; color:var(--text-muted);">Requisições, datas de criação e finalização</div>
         </div>
       </div>
       <button class="btn-close" id="btnCloseCategoryModal"><i data-lucide="x"></i></button>

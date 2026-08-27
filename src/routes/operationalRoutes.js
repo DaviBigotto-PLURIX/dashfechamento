@@ -19,16 +19,18 @@ router.get('/overview', async (req, res) => {
   }
 });
 
-// 2. Performance e Capacidade dos Compradores (com Destaques Executivos)
+// 2. Performance e Capacidade dos Compradores (com Destaques Executivos e Filtros por Investida/Tipo)
 router.get('/compradores', async (req, res) => {
   try {
-    const { mode = 'ytd', month = 'jul', year = '2026', search = '', sort = 'volume' } = req.query;
+    const { mode = 'ytd', month = 'jul', year = '2026', search = '', sort = 'volume', investida = '', tipoCompra = '' } = req.query;
     const data = await operationalService.getBuyersPerformance({
       mode,
       month,
       year: parseInt(year, 10),
       search,
-      sort
+      sort,
+      investida,
+      tipoCompra
     });
     res.json(data);
   } catch (err) {
@@ -40,7 +42,7 @@ router.get('/compradores', async (req, res) => {
 // 2.1 Raio-X Detalhado do Comprador (Performance por Investida e Tipo de Compra)
 router.get('/comprador-detalhe', async (req, res) => {
   try {
-    const { comprador, mode = 'ytd', month = 'jul', year = '2026' } = req.query;
+    const { comprador, mode = 'ytd', month = 'jul', year = '2026', investida = '', tipoCompra = '' } = req.query;
     if (!comprador) {
       return res.status(400).json({ error: 'Parâmetro comprador é obrigatório' });
     }
@@ -48,7 +50,9 @@ router.get('/comprador-detalhe', async (req, res) => {
       comprador,
       mode,
       month,
-      year: parseInt(year, 10)
+      year: parseInt(year, 10),
+      investida,
+      tipoCompra
     });
     res.json(data);
   } catch (err) {
