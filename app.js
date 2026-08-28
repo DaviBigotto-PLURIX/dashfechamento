@@ -1456,220 +1456,114 @@ class PlurixApp {
           }
 
           container.innerHTML = `
-            <!-- 1. CABEÇALHO EXECUTIVO DO COMPRADOR -->
-            <div class="dossier-header-bar" style="background:var(--surface-card); border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:16px 20px; margin-bottom:14px; box-shadow:var(--shadow-card); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px;">
-              <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
-                <button class="dossier-back-btn" id="btnBackFromBuyerDetail" style="background:var(--surface-subtle); border:1px solid var(--border-subtle); border-radius:8px; padding:8px 14px; color:var(--text-primary); font-size:12px; font-weight:700; display:flex; align-items:center; gap:8px; cursor:pointer; transition:var(--transition-fast);">
-                  <i data-lucide="arrow-left" style="width:15px; height:15px; color:var(--plx-primary);"></i>
-                  <span>Voltar para Compradores</span>
+            <!-- 1. CABEÇALHO LIMPO COM FILTROS INTEGRADOS -->
+            <div class="dossier-top-bar">
+              <div class="dossier-top-left">
+                <button class="dossier-back-btn" id="btnBackFromBuyerDetail">
+                  <i data-lucide="arrow-left" style="width:14px; height:14px;"></i>
+                  <span>Voltar</span>
                 </button>
-
-                <div class="dossier-user-info">
-                  <div class="dossier-user-avatar">${this.getInitials(compradorName)}</div>
-                  <div>
-                    <div class="dossier-user-name">
-                      <span>${compradorName}</span>
-                      <span class="tag-pill" style="font-size:10.5px; font-weight:800; padding:2px 8px; background:${(rGeral.sla_cotacao_medio || 0) <= 15 ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)'}; color:${(rGeral.sla_cotacao_medio || 0) <= 15 ? 'var(--emerald)' : 'var(--coral)'};">
-                        ${(rGeral.sla_cotacao_medio || 0) <= 10 ? '⚡ Alta Agilidade' : ((rGeral.sla_cotacao_medio || 0) <= 20 ? '⚖️ Operação Regular' : '⚠️ Atenção Gargalo')}
-                      </span>
-                    </div>
-                    <div class="dossier-user-meta">
-                      <span>${data.periodo}</span>
-                      <span style="opacity:0.4;">•</span>
-                      <span>Carteira Total: <strong>${Number(rGeral.total_solicitacoes || 0).toLocaleString('pt-BR')} requisições</strong></span>
-                      <span style="opacity:0.4;">•</span>
-                      <span>SLA Médio Geral: <strong>${rGeral.sla_cotacao_medio || 0} dias</strong></span>
-                    </div>
+                <div class="dossier-avatar-clean">${this.getInitials(compradorName)}</div>
+                <div>
+                  <div class="dossier-name-title">${compradorName}</div>
+                  <div class="dossier-meta-subtitle">
+                    ${data.periodo} · <strong>${Number(rGeral.total_solicitacoes || 0).toLocaleString('pt-BR')} requisições totais</strong> · SLA médio geral: <strong>${rGeral.sla_cotacao_medio || 0}d</strong>
                   </div>
                 </div>
               </div>
 
-              <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-                <span style="font-size:11px; font-weight:700; color:var(--text-muted); margin-right:4px;">Mix Geral:</span>
-                <span class="tag-pill" style="padding:4px 9px; font-size:11px; font-weight:800; background:rgba(0,26,143,0.08); color:var(--plx-primary);">
-                  📦 ${rGeral.mix?.spotMateriais || 0} Mat
-                </span>
-                <span class="tag-pill" style="padding:4px 9px; font-size:11px; font-weight:800; background:rgba(0,168,232,0.1); color:var(--plx-accent);">
-                  🛠️ ${rGeral.mix?.spotServicos || 0} Serv
-                </span>
-                <span class="tag-pill" style="padding:4px 9px; font-size:11px; font-weight:800; background:rgba(139,92,246,0.1); color:#8B5CF6;">
-                  🏢 ${rGeral.mix?.estrategica || 0} Estrat
-                </span>
-              </div>
-            </div>
-
-            <!-- 2. BARRA DE SEGMENTAÇÃO DINÂMICA (INVESTIDA & TIPO DE COMPRA) -->
-            <div class="dossier-filters-bar">
-              <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
-                <div style="display:flex; align-items:center; gap:6px; color:var(--text-primary); font-size:12.5px; font-weight:800;">
-                  <i data-lucide="sliders-horizontal" style="width:15px; height:15px; color:var(--plx-primary);"></i>
-                  <span>Segmentar Performance:</span>
-                </div>
-
-                <div style="display:flex; align-items:center; gap:6px;">
-                  <label for="dossierInvestidaSelect" style="font-size:11px; font-weight:800; text-transform:uppercase; color:var(--text-muted);">🏢 Investida:</label>
-                  <select id="dossierInvestidaSelect" class="select-filter-clean">
-                    <option value="todas" ${this._buyerInvestidaFilter === 'todas' ? 'selected' : ''}>Todas as Lojas (${investidas.length} redes)</option>
+              <div class="dossier-inline-filters">
+                <div class="dossier-select-wrapper">
+                  <label for="dossierInvestidaSelect">Loja:</label>
+                  <select id="dossierInvestidaSelect">
+                    <option value="todas" ${this._buyerInvestidaFilter === 'todas' ? 'selected' : ''}>Todas as Lojas (${investidas.length})</option>
                     ${(data.opcoesFiltros?.investidas || []).filter(i => i !== 'todas').map(inv => `
                       <option value="${inv}" ${this._buyerInvestidaFilter === inv ? 'selected' : ''}>${inv}</option>
                     `).join('')}
                   </select>
                 </div>
 
-                <div style="display:flex; align-items:center; gap:6px;">
-                  <label for="dossierTipoSelect" style="font-size:11px; font-weight:800; text-transform:uppercase; color:var(--text-muted);">📦 Modalidade:</label>
-                  <select id="dossierTipoSelect" class="select-filter-clean">
+                <div class="dossier-select-wrapper">
+                  <label for="dossierTipoSelect">Tipo:</label>
+                  <select id="dossierTipoSelect">
                     ${(data.opcoesFiltros?.tiposCompra || []).map(t => `
                       <option value="${t.id}" ${this._buyerTipoFilter === t.id ? 'selected' : ''}>${t.label}</option>
                     `).join('')}
                   </select>
                 </div>
-              </div>
 
-              <div>
                 ${hasDossierFilter ? `
-                  <button id="btnResetDossierFilters" class="btn btn-secondary btn-sm" style="font-size:11px; padding:6px 12px; background:rgba(239,68,68,0.08); border-color:rgba(239,68,68,0.25); color:var(--coral); font-weight:800;">
-                    <i data-lucide="rotate-ccw" style="width:12px; height:12px;"></i>
-                    <span>Limpar Filtros (Ver Carteira Consolidada)</span>
+                  <button id="btnResetDossierFilters" class="btn btn-secondary btn-sm" style="font-size:11px; padding:4px 8px; color:var(--coral); font-weight:700;">
+                    <i data-lucide="x" style="width:12px; height:12px;"></i>
+                    <span>Limpar</span>
                   </button>
-                ` : `
-                  <span style="font-size:11.5px; color:var(--emerald); font-weight:700; display:flex; align-items:center; gap:5px; background:rgba(16,185,129,0.08); padding:4px 10px; border-radius:6px;">
-                    <i data-lucide="check-circle-2" style="width:13px; height:13px;"></i>
-                    <span>Exibindo Carteira Consolidada</span>
-                  </span>
-                `}
+                ` : ''}
               </div>
             </div>
 
-            <!-- 3. OS GRANDES NÚMEROS DO COMPRADOR (6 HERO KPIS EM GRID PERFEITO) -->
-            <div class="dossier-kpis-grid">
+            <!-- 2. STAT STRIP: 4 KPIS ESSENCIAIS E AREJADOS -->
+            <div class="dossier-stat-strip">
               <!-- KPI 1: Volume Selecionado -->
-              <div class="dossier-kpi-card primary">
-                <div class="dossier-kpi-header">
-                  <span class="dossier-kpi-title">Volume Selecionado</span>
-                  <i data-lucide="layers" class="dossier-kpi-icon" style="color:var(--plx-primary);"></i>
-                </div>
-                <div class="dossier-kpi-number">${Number(r.total_solicitacoes || 0).toLocaleString('pt-BR')}</div>
-                <div class="dossier-kpi-sub">
+              <div class="dossier-stat-card">
+                <div class="dossier-stat-label">Volume Selecionado</div>
+                <div class="dossier-stat-val">${Number(r.total_solicitacoes || 0).toLocaleString('pt-BR')}</div>
+                <div class="dossier-stat-desc">
                   Spot: <strong>${Number((r.mix?.spotMateriais || 0) + (r.mix?.spotServicos || 0)).toLocaleString('pt-BR')}</strong> · Estrat: <strong>${Number(r.mix?.estrategica || 0).toLocaleString('pt-BR')}</strong>
                 </div>
               </div>
 
-              <!-- KPI 2: Em Aberto Total -->
-              <div class="dossier-kpi-card amber">
-                <div class="dossier-kpi-header">
-                  <span class="dossier-kpi-title" style="color:var(--amber);">Em Aberto Total</span>
-                  <i data-lucide="clock" class="dossier-kpi-icon" style="color:var(--amber);"></i>
-                </div>
-                <div class="dossier-kpi-number" style="color:var(--amber);">${Number(r.backlog_ativo || 0).toLocaleString('pt-BR')}</div>
-                <div class="dossier-kpi-sub" style="color:var(--text-secondary);">
-                  <strong style="color:var(--emerald);">${Number(r.total_atendidas || 0).toLocaleString('pt-BR')}</strong> finalizadas
+              <!-- KPI 2: Em Aberto -->
+              <div class="dossier-stat-card">
+                <div class="dossier-stat-label">Em Aberto (Fila)</div>
+                <div class="dossier-stat-val" style="color:var(--amber);">${Number(r.backlog_ativo || 0).toLocaleString('pt-BR')}</div>
+                <div class="dossier-stat-desc">
+                  <span style="color:var(--emerald); font-weight:700;">🟢 ${Number(r.backlog_dentro_sla || 0).toLocaleString('pt-BR')} no SLA</span> · <span style="color:var(--coral); font-weight:700;">🔴 ${Number(r.backlog_fora_sla || 0).toLocaleString('pt-BR')} fora</span>
                 </div>
               </div>
 
-              <!-- KPI 3: Aberto no SLA -->
-              <div class="dossier-kpi-card emerald" style="background:rgba(16, 185, 129, 0.04);">
-                <div class="dossier-kpi-header">
-                  <span class="dossier-kpi-title" style="color:var(--emerald);">🟢 Aberto no SLA</span>
-                  <i data-lucide="shield-check" class="dossier-kpi-icon" style="color:var(--emerald);"></i>
-                </div>
-                <div class="dossier-kpi-number" style="color:var(--emerald);">${Number(r.backlog_dentro_sla || 0).toLocaleString('pt-BR')}</div>
-                <div class="dossier-kpi-sub" style="color:var(--text-secondary);">
-                  <strong style="color:var(--emerald);">${r.pct_backlog_dentro_sla || 0}%</strong> da fila ativa
+              <!-- KPI 3: SLA Médio -->
+              <div class="dossier-stat-card">
+                <div class="dossier-stat-label">SLA Médio de Cotação</div>
+                <div class="dossier-stat-val" style="color:var(--plx-accent);">${r.sla_cotacao_medio || 0}<span style="font-size:14px; font-weight:700; color:var(--text-muted); margin-left:3px;">dias</span></div>
+                <div class="dossier-stat-desc">
+                  Materiais: <strong>${r.mix?.spotMateriais || 0}</strong> · Serviços: <strong>${r.mix?.spotServicos || 0}</strong>
                 </div>
               </div>
 
-              <!-- KPI 4: Fora do SLA -->
-              <div class="dossier-kpi-card danger" style="background:rgba(239, 68, 68, 0.04);">
-                <div class="dossier-kpi-header">
-                  <span class="dossier-kpi-title" style="color:var(--coral);">🔴 Fora do SLA</span>
-                  <i data-lucide="alert-octagon" class="dossier-kpi-icon" style="color:var(--coral);"></i>
-                </div>
-                <div class="dossier-kpi-number" style="color:var(--coral);">${Number(r.backlog_fora_sla || 0).toLocaleString('pt-BR')}</div>
-                <div class="dossier-kpi-sub" style="color:var(--coral);">
-                  <strong>${r.pct_backlog_fora_sla || 0}%</strong> estourada
-                </div>
-              </div>
-
-              <!-- KPI 5: SLA Médio de Cotação -->
-              <div class="dossier-kpi-card accent">
-                <div class="dossier-kpi-header">
-                  <span class="dossier-kpi-title" style="color:var(--plx-accent);">SLA Médio Cotação</span>
-                  <i data-lucide="timer" class="dossier-kpi-icon" style="color:var(--plx-accent);"></i>
-                </div>
-                <div class="dossier-kpi-number" style="color:var(--plx-accent);">${r.sla_cotacao_medio || 0}<span style="font-size:13px; font-weight:700; color:var(--text-muted); margin-left:3px;">dias</span></div>
-                <div class="dossier-kpi-sub">
-                  Mat: <strong>${r.mix?.spotMateriais || 0}</strong> · Serv: <strong>${r.mix?.spotServicos || 0}</strong>
-                </div>
-              </div>
-
-              <!-- KPI 6: Taxa de Conformidade -->
-              <div class="dossier-kpi-card emerald">
-                <div class="dossier-kpi-header">
-                  <span class="dossier-kpi-title" style="color:var(--emerald);">Taxa Conformidade</span>
-                  <i data-lucide="target" class="dossier-kpi-icon" style="color:var(--emerald);"></i>
-                </div>
-                <div class="dossier-kpi-number" style="color:var(--emerald);">${Math.round(r.taxa_conformidade_pct || 100)}%</div>
-                <div class="dossier-kpi-sub">
-                  <div style="display:flex; justify-content:space-between; margin-bottom:2px; font-size:10.5px;">
-                    <span><strong>${Number(r.dentro_sla_count || 0).toLocaleString('pt-BR')}</strong> no prazo</span>
-                    <span>${Number(r.com_sla || 0).toLocaleString('pt-BR')} total</span>
-                  </div>
-                  <div style="width:100%; height:4px; background:rgba(0,0,0,0.06); border-radius:2px; overflow:hidden;">
-                    <div style="width:${Math.min(100, Math.round(r.taxa_conformidade_pct || 100))}%; height:100%; background:var(--emerald); border-radius:2px;"></div>
-                  </div>
+              <!-- KPI 4: Taxa de Conformidade -->
+              <div class="dossier-stat-card">
+                <div class="dossier-stat-label">Taxa de Conformidade</div>
+                <div class="dossier-stat-val" style="color:var(--emerald);">${Math.round(r.taxa_conformidade_pct || 100)}%</div>
+                <div class="dossier-stat-desc">
+                  <strong>${Number(r.dentro_sla_count || 0).toLocaleString('pt-BR')}</strong> de <strong>${Number(r.com_sla || 0).toLocaleString('pt-BR')}</strong> no prazo oficial
                 </div>
               </div>
             </div>
 
-            <!-- 4. PERFORMANCE POR MODALIDADE & PERFORMANCE POR REDE ATENDIDA (INTERATIVAS) -->
-            <div class="dossier-grid-2">
-              <!-- 4.1 Por Modalidade de Compra -->
-              <div class="card" style="padding:16px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                  <div>
-                    <div class="card-title" style="display:flex; align-items:center; gap:6px;">
-                      <span>📦 Performance por Modalidade</span>
-                      <span class="tag-pill" style="font-size:10px; padding:1px 6px;">Clique para filtrar</span>
-                    </div>
-                    <div class="card-subtitle">Volume, prazos e taxa de SLA por tipo de aquisição</div>
-                  </div>
+            <!-- 3. PAINÉIS DE SEGMENTAÇÃO CLEAN (50% / 50%) -->
+            <div class="dossier-split-2">
+              <!-- 3.1 Modalidades de Compra -->
+              <div class="dossier-panel-clean">
+                <div class="dossier-panel-header">
+                  <span class="dossier-panel-title">📦 Modalidades de Compra</span>
+                  <span style="font-size:11px; color:var(--text-muted);">Clique para filtrar</span>
                 </div>
-
-                <div style="display:flex; flex-direction:column; gap:10px;">
+                <div>
                   ${modalidades.map(m => {
                     const isSelected = this._buyerTipoFilter === m.tipo_compra;
                     const metaDias = m.tipo_compra === 'SPOT_MATERIAIS' ? 10 : (m.tipo_compra === 'SPOT_SERVICOS' ? 15 : 45);
                     const pctConform = Math.round(m.taxa_conformidade_pct || 0);
                     const isGood = pctConform >= 75;
                     return `
-                      <div class="dossier-modalidade-card ${isSelected ? 'active' : ''}" data-tipo="${m.tipo_compra}">
-                        <div style="display:flex; align-items:center; justify-content:space-between;">
-                          <div style="display:flex; align-items:center; gap:8px;">
-                            <span style="font-weight:800; color:var(--text-primary); font-size:13px;">${m.modalidade}</span>
-                            <span class="tag-pill" style="font-size:10px; font-weight:800; padding:1px 6px; background:rgba(0,0,0,0.05);">Meta: ${metaDias}d</span>
-                          </div>
-                          <div style="display:flex; align-items:baseline; gap:4px;">
-                            <span style="font-size:14px; font-weight:900; color:${m.sla_medio <= metaDias ? 'var(--emerald)' : 'var(--coral)'};">${m.sla_medio}d</span>
-                            <span style="font-size:10px; color:var(--text-muted);">médio</span>
-                          </div>
-                        </div>
-
-                        <!-- Barra de SLA -->
+                      <div class="dossier-row-item dossier-modalidade-card ${isSelected ? 'active' : ''}" data-tipo="${m.tipo_compra}">
                         <div style="display:flex; align-items:center; gap:8px;">
-                          <div style="flex:1; height:6px; background:rgba(0,0,0,0.06); border-radius:3px; overflow:hidden;">
-                            <div style="width:${Math.min(100, pctConform)}%; height:100%; background:${isGood ? 'var(--emerald)' : (pctConform >= 50 ? 'var(--amber)' : 'var(--coral)')}; border-radius:3px;"></div>
-                          </div>
-                          <span style="font-size:11px; font-weight:800; color:${isGood ? 'var(--emerald)' : (pctConform >= 50 ? 'var(--amber)' : 'var(--coral)')}; min-width:48px; text-align:right;">
-                            ${pctConform}% SLA
-                          </span>
+                          <span style="font-size:12.5px; font-weight:700; color:var(--text-primary);">${m.modalidade}</span>
+                          <span style="font-size:10.5px; color:var(--text-muted); background:var(--surface-subtle); padding:1px 5px; border-radius:4px;">Meta: ${metaDias}d</span>
                         </div>
-
-                        <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--text-muted);">
-                          <span>Total: <strong>${Number(m.total).toLocaleString('pt-BR')}</strong> · Concluídas: <strong>${Number(m.concluidas).toLocaleString('pt-BR')}</strong></span>
-                          <span style="color:${m.backlog > 0 ? 'var(--amber)' : 'var(--emerald)'}; font-weight:700;">
-                            ${m.backlog > 0 ? `⏳ ${m.backlog} em aberto` : '✅ Zerado'}
-                          </span>
+                        <div style="display:flex; align-items:center; gap:12px;">
+                          <span style="font-size:11px; color:var(--text-muted);">${Number(m.total).toLocaleString('pt-BR')} reqs (${m.backlog} abertas)</span>
+                          <span style="font-size:12px; font-weight:800; color:${isGood ? 'var(--emerald)' : (pctConform >= 50 ? 'var(--amber)' : 'var(--coral)')};">${pctConform}% SLA</span>
+                          <span style="font-size:12px; font-weight:800; color:var(--plx-accent); min-width:32px; text-align:right;">${m.sla_medio}d</span>
                         </div>
                       </div>
                     `;
@@ -1677,38 +1571,28 @@ class PlurixApp {
                 </div>
               </div>
 
-              <!-- 4.2 Por Rede Atendida -->
-              <div class="card" style="padding:16px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                  <div>
-                    <div class="card-title" style="display:flex; align-items:center; gap:6px;">
-                      <span>🏢 Performance por Rede Atendida</span>
-                      <span class="tag-pill" style="font-size:10px; padding:1px 6px;">Clique para filtrar</span>
-                    </div>
-                    <div class="card-subtitle">Distribuição da demanda e prazos por loja da carteira</div>
-                  </div>
-                  <span style="font-size:11px; font-weight:800; color:var(--text-muted);">${investidas.length} redes</span>
+              <!-- 3.2 Redes Atendidas -->
+              <div class="dossier-panel-clean">
+                <div class="dossier-panel-header">
+                  <span class="dossier-panel-title">🏢 Redes Atendidas (${investidas.length})</span>
+                  <span style="font-size:11px; color:var(--text-muted);">Clique para filtrar</span>
                 </div>
-
-                <div class="dossier-stores-grid">
+                <div>
                   ${investidas.map(inv => {
                     const isSelected = this._buyerInvestidaFilter === inv.investida;
                     const isSlow = inv.alerta === 'Gargalo Crítico nesta Investida' || inv.sla_cotacao_medio > 15;
                     const pctSla = Math.round(inv.taxa_conformidade_pct || 0);
                     return `
-                      <div class="dossier-store-card btn-filter-store ${isSelected ? 'active' : ''}" data-investida="${inv.investida}" style="border-top:3px solid ${isSlow ? 'var(--coral)' : 'var(--emerald)'};">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                          <div class="dossier-store-name" style="font-size:12.5px; font-weight:800;">${inv.investida}</div>
-                          <span class="sla-badge ${isSlow ? 'slow' : 'fast'}" style="font-size:10px; padding:1px 6px;">
+                      <div class="dossier-row-item btn-filter-store ${isSelected ? 'active' : ''}" data-investida="${inv.investida}">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                          <span style="font-size:12.5px; font-weight:700; color:var(--text-primary);">${inv.investida}</span>
+                          <span style="font-size:11px; color:var(--text-muted);">${Number(inv.total_solicitacoes).toLocaleString('pt-BR')} reqs (${inv.backlog_ativo} abertas)</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:12px;">
+                          <span style="font-size:11.5px; font-weight:800; color:${pctSla >= 75 ? 'var(--emerald)' : 'var(--coral)'};">${pctSla}% SLA</span>
+                          <span style="font-size:11px; font-weight:800; padding:1px 6px; border-radius:4px; background:${isSlow ? 'rgba(239,68,68,0.1)' : 'rgba(16,185,129,0.1)'}; color:${isSlow ? 'var(--coral)' : 'var(--emerald)'};">
                             ${inv.sla_cotacao_medio}d
                           </span>
-                        </div>
-                        <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px;">
-                          Vol: <strong>${Number(inv.total_solicitacoes).toLocaleString('pt-BR')}</strong> · Aberto: <strong style="color:${inv.backlog_ativo > 0 ? 'var(--amber)' : 'inherit'};">${Number(inv.backlog_ativo).toLocaleString('pt-BR')}</strong>
-                        </div>
-                        <div style="display:flex; align-items:center; justify-content:space-between; font-size:10.5px; font-weight:800; color:${pctSla >= 75 ? 'var(--emerald)' : 'var(--coral)'};">
-                          <span>${pctSla}% no SLA</span>
-                          <span style="font-size:10px; color:var(--text-muted); font-weight:600;">${inv.dentro_sla_count}/${inv.com_sla}</span>
                         </div>
                       </div>
                     `;
